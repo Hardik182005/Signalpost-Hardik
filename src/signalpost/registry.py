@@ -261,6 +261,18 @@ class RegistryClient:
             _dig(body, "naeringskode1", "beskrivelse"),
             _pointer("naeringskode1", "beskrivelse"),
         )
+        # What the company registered itself as doing. For the nine in ten companies with
+        # no verifiable website this is the only first-party statement of the business.
+        activity = body.get("aktivitet") or body.get("vedtektsfestetFormaal")
+        if isinstance(activity, list):
+            activity = " ".join(str(line).strip() for line in activity if str(line).strip())
+        add(
+            "registered_activity",
+            "legal_identity",
+            activity,
+            _pointer("aktivitet" if body.get("aktivitet") else "vedtektsfestetFormaal"),
+            reason_when_missing="The registry record states no activity or purpose",
+        )
         add(
             "sector_code",
             "legal_identity",
@@ -602,7 +614,14 @@ class RegistryClient:
                     evidence.append(item)
                 claims.append(
                     Claim(
-                        claim_key=claim_key(org, "accounts_audited", year),
+                        # Company and group accounts for one year are two statements; the
+                        # group's key carries its scope so the two cannot collide. The
+                        # company key is unchanged so refresh against earlier runs is stable.
+                        claim_key=(
+                            claim_key(org, "accounts_audited", year)
+                            if scope == "company"
+                            else claim_key(org, "accounts_audited", year, scope)
+                        ),
                         field="accounts_audited",
                         family="financials",
                         value=not audited,
@@ -653,6 +672,7 @@ class RegistryClient:
                     value={
                         "organisation_number": number,
                         "name": name,
+                        "website": _clean(unit.get("hjemmeside")),
                         "employees": unit.get("antallAnsatte")
                         if unit.get("harRegistrertAntallAnsatte") is not False
                         else None,
