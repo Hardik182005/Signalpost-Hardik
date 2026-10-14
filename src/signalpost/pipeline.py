@@ -50,6 +50,7 @@ from .models import (
     utc_now,
     validate_result,
 )
+from .nav_jobs import NavJobIndex, NavJobsResearcher
 from .registry import RegistryClient
 from .website import WebsiteResearcher
 
@@ -96,10 +97,13 @@ class CompanyPipeline:
         include_financials: bool = True,
         include_structure: bool = True,
         include_roles: bool = True,
+        include_nav_jobs: bool = True,
+        nav_index: NavJobIndex | None = None,
     ) -> None:
         self.fetcher = fetcher
         self.registry = RegistryClient(fetcher)
         self.website = WebsiteResearcher(fetcher, max_pages=max_pages, today=today)
+        self.nav_jobs = NavJobsResearcher(fetcher, nav_index) if include_nav_jobs else None
         self.include_financials = include_financials
         self.include_structure = include_structure
         self.include_roles = include_roles
@@ -213,6 +217,21 @@ class CompanyPipeline:
             detail=detail,
         )
 
+    def _nav_jobs_stage(self, org: str, identity: CompanyIdentity) -> StageOutcome:
+        assert self.nav_jobs is not None
+        result = self.nav_jobs.research(
+            org, identity.own_numbers, [identity.legal_name, *identity.subunit_names]
+        )
+        identity.listed_websites = list(dict.fromkeys(result.homepages))
+        return StageOutcome(
+            name="nav_jobs",
+            ok=True,
+            claims=result.claims,
+            evidence=result.evidence,
+            snapshots=result.snapshots,
+            detail=result.detail,
+        )
+
     def _website_stage(
         self, org: str, identity: CompanyIdentity, page_budget: int | None
     ) -> StageOutcome:
@@ -301,11 +320,34 @@ class CompanyPipeline:
                 "postal_codes": sorted(identity.postal_codes),
                 "subunit_numbers": sorted(identity.subunit_numbers),
             }
+            nav: StageOutcome | None = None
+            if self.nav_jobs is not None:
+                nav = self._stage("nav_jobs", org, lambda: self._nav_jobs_stage(org, identity))
+                stage_times["nav_jobs"] = nav.seconds
+                if nav.error:
+                    result.errors.append(nav.error)
+                result.identity["nav_jobs"] = nav.detail
+                if identity.listed_websites:
+                    result.identity["listed_websites"] = list(identity.listed_websites)
             website = self._stage(
                 "website", org, lambda: self._website_stage(org, identity, request.page_budget)
             )
             stage_times["website"] = website.seconds
-            result.claims.extend(website.claims)
+            website_claims = website.claims
+            if nav is not None and nav.claims:
+                # Vacancies confirmed by NAV answer the jobs question, so the website's
+                # "no openings found" claim no longer stands, and a title the site also
+                # lists is published once.
+                nav_keys = {item.claim_key for item in nav.claims}
+                website_claims = [
+                    item
+                    for item in website_claims
+                    if item.field != "job_postings" and item.claim_key not in nav_keys
+                ]
+                result.claims.extend(nav.claims)
+                result.evidence.extend(nav.evidence)
+                result.snapshots.extend(nav.snapshots)
+            result.claims.extend(website_claims)
             result.evidence.extend(website.evidence)
             result.snapshots.extend(website.snapshots)
             if website.error:
@@ -364,7 +406,9 @@ class CompanyPipeline:
                 }
             )
 
-        brief = synthesis_mod.build_brief(org, result.claims)
+        brief = synthesis_mod.build_brief(
+            org, result.claims, refresh=result.refresh, changes=result.changes
+        )
         result.synthesis = brief.to_dict()
 
         state, reason = self._terminal_state(registry, website, result.claims)
