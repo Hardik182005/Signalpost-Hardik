@@ -52,6 +52,15 @@ DEFAULT_MAX_REDIRECTS = 4
 DEFAULT_MAX_ATTEMPTS = 2
 DEFAULT_HOST_DELAY = 0.6
 
+# Hosts that are public machine APIs rather than someone's web server. The 0.6 s
+# politeness gap is right for a small company site and wrong for the Brønnøysund
+# open-data API: every company costs four registry calls, all to one host, so at 0.6 s
+# a 1,000-company batch spent 4,016 x 0.6 = 2,410 s of its 2,539 s waiting on that
+# single throttle (measured, submission-1000). 0.1 s is ten requests a second.
+API_HOST_DELAYS = {
+    "data.brreg.no": 0.1,
+}
+
 RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
 
 # Failures whose answer will not change on a second attempt. A closed port stays closed
@@ -219,13 +228,15 @@ class RobotsPolicy:
 class _HostThrottle:
     """Per-host politeness spacing, honoured across concurrent workers."""
 
-    def __init__(self, default_delay: float) -> None:
+    def __init__(self, default_delay: float, host_delays: dict[str, float] | None = None) -> None:
         self._default = default_delay
+        self._host_delays = dict(host_delays or {})
         self._next_allowed: dict[str, float] = {}
         self._lock = threading.Lock()
 
     def wait(self, host: str, delay: float | None = None) -> float:
-        gap = self._default if delay is None else max(self._default, delay)
+        base = self._host_delays.get(host, self._default)
+        gap = base if delay is None else max(base, delay)
         with self._lock:
             now = time.monotonic()
             earliest = self._next_allowed.get(host, 0.0)
@@ -289,7 +300,7 @@ class Fetcher:
         self.max_attempts = max_attempts
         self.offline = offline
         self.snapshots = SnapshotStore(snapshot_root)
-        self._throttle = _HostThrottle(host_delay)
+        self._throttle = _HostThrottle(host_delay, API_HOST_DELAYS if host_delay == DEFAULT_HOST_DELAY else None)
         self._robots = RobotsPolicy(self)
         self._ssl_context = ssl.create_default_context()
         self._cache: dict[str, Response] = {}
@@ -313,12 +324,17 @@ class Fetcher:
         use_cache: bool = True,
         attempts: int | None = None,
         timeout: float | None = None,
+        headers: dict[str, str] | None = None,
     ) -> Response:
         """Retrieve one URL, following validated redirects.
 
         `attempts` and `timeout` override the fetcher defaults for one call. They exist
         for the registry, whose answers the whole profile depends on: every attempt is
         still a request charged to the same budget.
+
+        `headers` are extra request headers, such as an API bearer token. They are sent
+        only to the host first requested, never across a redirect to another host, and
+        are not recorded in snapshots or the request log.
         """
         started = time.monotonic()
         cache_key = f"{purpose}\x1f{url}"
@@ -334,6 +350,7 @@ class Fetcher:
         chain: list[str] = []
         current = url
         limit = max_bytes or self.max_bytes
+        origin_host = urlsplit(url).hostname
 
         for hop in range(self.max_redirects + 1):
             verdict = validate_url(current)
@@ -356,6 +373,7 @@ class Fetcher:
                 allow_non_textual=allow_non_textual,
                 attempts=attempts,
                 timeout=timeout,
+                headers=headers if urlsplit(current).hostname == origin_host else None,
             )
             if response.error and response.status == 0:
                 response.url = url
@@ -414,6 +432,7 @@ class Fetcher:
         allow_non_textual: bool,
         attempts: int | None = None,
         timeout: float | None = None,
+        headers: dict[str, str] | None = None,
     ) -> Response:
         last: Response | None = None
         max_attempts = max(1, attempts or self.max_attempts)
@@ -432,6 +451,7 @@ class Fetcher:
                         limit=limit,
                         allow_non_textual=allow_non_textual,
                         timeout=timeout,
+                        **({"extra_headers": headers} if headers else {}),
                     )
             except BudgetExceeded as exc:
                 return self._failure(url, str(exc), "budget")
@@ -459,6 +479,7 @@ class Fetcher:
         limit: int,
         allow_non_textual: bool,
         timeout: float | None = None,
+        extra_headers: dict[str, str] | None = None,
     ) -> Response:
         timeout = timeout or self.timeout
         parts = urlsplit(url)
@@ -487,6 +508,7 @@ class Fetcher:
             "Accept-Encoding": "gzip, deflate",
             "Accept-Language": "nb-NO,no;q=0.9,en;q=0.8",
             "Connection": "close",
+            **(extra_headers or {}),
         }
         try:
             connection.request("GET", path, headers=headers)
