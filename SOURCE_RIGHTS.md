@@ -58,6 +58,26 @@ The bulk entity snapshot (`.../enheter/lastned/csv`) was downloaded once, outsid
 build the sampling universe. Its SHA-256 and row count are recorded in
 `data/corpus/selection.json`. It is not fetched during evaluation.
 
+## NAV vacancy register
+
+**Source.** NAV's open job-vacancy feed, `https://pam-stilling-feed.nav.no`
+([documentation](https://navikt.github.io/pam-stilling-feed/)), read with the public
+token NAV publishes for open use. Source class `official_job_register`.
+
+**Terms.** [arbeidsplassen.nav.no/vilkar-api](https://arbeidsplassen.nav.no/vilkar-api):
+the service is free; consumers may republish and display ads; ads that become inactive or
+are deleted at NAV must be removed promptly, and updated ads updated promptly.
+
+**How the terms are met.** A vacancy is published only after its NAV record has been read
+in the same run and reports `ACTIVE`. Nothing is carried forward: an ad NAV has stopped is
+simply absent from the next run, and refresh reports it as a removed claim. Published values
+are the title, place, publication and expiry dates, engagement type, employer number and the
+ad's own arbeidsplassen link — no contact persons, no ad body.
+
+**Cache.** `data/nav/nav-job-index.json.gz` is a declared external cache: ad ids, titles,
+display and employer names, employer numbers and the feed cursor. It directs the run to
+records worth reading and is never cited as evidence.
+
 ## Company-owned websites
 
 **Method.** Signalpost fetches a small number of pages from a company's own site: the landing

@@ -2,38 +2,36 @@
 
 ## The short answer
 
-**The submitted run path uses no language model, no model provider, and no API key.**
+**The submitted run path uses no language model, no model provider, and no API key that
+belongs to anyone.**
 
 Synthesis is deterministic template rendering over already-published claims
 (`src/signalpost/synthesis.py`, `method = "deterministic-template"`). Extraction is regular
 expressions, HTML parsing and structured-data reading. Identity resolution is a weighted
-rule set with explicit thresholds. Nothing in a run sends text to a model provider, and
-nothing in a run reads a credential.
+rule set with explicit thresholds. Nothing in a run sends text to a model provider.
 
 Verify it:
 
 ```
-grep -rn "environ\|getenv\|openai\|anthropic" src/signalpost/
+grep -rn "openai\|anthropic" src/signalpost/
 ```
 
-This returns nothing. Run on 2026-09-14 against the submitted tree, exit status 1 (no
-matches). `main.py` is a path shim and reads no environment variables either; the only
-occurrence of the word in that file is a comment saying the documented command works without
-one.
-
-The practical consequence for a reviewer: the run needs no `.env`, no account, no key, and no
-network access beyond the two source hosts. It also means measured third-party spend is
-$0.00 rather than "small" — see [`COSTS.md`](COSTS.md).
+This returns nothing. The run reads a small set of optional environment variables (below),
+none of which is required and none of which is a personal credential.
 
 ## Network APIs used in the submitted run path
 
 | Provider | Endpoints | Auth | Cost | Status |
 | --- | --- | --- | --- | --- |
 | Brønnøysundregistrene (`data.brreg.no`) | Entity, subentity, roles, subunits, group structure, annual accounts | None — open data | Free, NLOD 2.0 | **Enabled** |
+| NAV vacancy feed (`pam-stilling-feed.nav.no`) | `/api/publicToken`, `/api/v1/feed/{page}`, `/api/v1/feedentry/{ad}` | NAV's published public bearer token, fetched at run time | Free | **Enabled** |
 | Company websites | The company's own pages, `robots.txt` first | None | Free | **Enabled** |
 
-There is no third provider. `out/eval100b-report.json` records every host contacted in the
-100-company run under `budget.top_hosts`; the only non-company host is `data.brreg.no`.
+The NAV feed is NAV's open job-vacancy API ([documentation](https://navikt.github.io/pam-stilling-feed/),
+[terms](https://arbeidsplassen.nav.no/vilkar-api)). Its token is the public one NAV publishes
+for open use at `/api/publicToken`; it is fetched by the run, not configured, so the run is
+reproducible by anyone. `SIGNALPOST_NAV_FEED_TOKEN` may override it with a privately
+registered token. How the source is used is in [`CRAWLERS.md`](CRAWLERS.md#nav-vacancies).
 
 ## Model providers
 
@@ -79,8 +77,9 @@ The only hit is the definition itself.
 - a `Sentence` is emitted only when the claims it names are `available`;
 - every `Sentence` carries the `claim_keys` it was rendered from, so a reviewer can click
   from a sentence to the claim to the evidence to the snapshot;
-- `LEGAL_FORMS` maps a registry form code to readable English; `EMPLOYEE_BANDS` maps a head
-  count to a band rather than restating a number that may be stale;
+- `LEGAL_FORMS` maps a registry form code to readable English;
+- derived figures (operating margin, equity ratio, revenue change) are computed only from
+  filed figures of the same period, say that they are calculated, and cite every input claim;
 - the method string on the synthesis block is `"deterministic-template"`, so the output
   states its own provenance.
 
@@ -90,14 +89,18 @@ hallucinate, and it costs nothing.
 
 ## Environment variables
 
-The submitted run path reads **none**. `.env.example` states this and gives the same
-verification command used above.
+Every variable is optional. None is a secret; the run works with none of them set.
 
-One variable is documented there for a disabled script only:
-
-| Variable | Used by | In the submitted path |
+| Variable | Used by | Effect |
 | --- | --- | --- |
-| `BRAVE_SEARCH_API_KEY` | `scripts/run_brave_discovery.py` | **No.** The script is not invoked by `main.py` or `runner.py`. |
+| `SIGNALPOST_MAX_REQUESTS` | `runner.py` | Outbound request cap, when no `--max-requests` flag is given (default: 20 per input) |
+| `SIGNALPOST_MAX_SECONDS` | `runner.py` | Wall-clock cap (default: 2,700) |
+| `SIGNALPOST_MAX_SPEND_USD` | `runner.py` | Third-party spend cap (default: 10; actual spend is 0) |
+| `SIGNALPOST_CONCURRENCY` | `runner.py` | Companies in flight (default: 8, or 24 above 200 inputs) |
+| `SIGNALPOST_NAV_FEED_TOKEN` | `nav_jobs.py` | Use a registered NAV feed token instead of NAV's public one |
+| `BRAVE_SEARCH_API_KEY` | `scripts/run_brave_discovery.py` | **Not in the run path.** The script is not invoked by `main.py` or `runner.py`. |
+
+A command-line flag always wins over the environment, and the environment over the default.
 
 If a credential were ever introduced, the handling rules are in
 [`docs/SECURITY.md`](docs/SECURITY.md): secrets never enter a URL, never enter a snapshot,
@@ -109,6 +112,7 @@ and are redacted from stored request metadata (`net.SENSITIVE_QUERY_KEYS`,
 | Component | Licence | Note |
 | --- | --- | --- |
 | BRREG open data | NLOD 2.0 | Attribution required; see [`SOURCE_RIGHTS.md`](SOURCE_RIGHTS.md) |
+| NAV vacancy feed | NAV API terms of use | Free; inactive ads must be dropped promptly; see [`SOURCE_RIGHTS.md`](SOURCE_RIGHTS.md) |
 | beautifulsoup4, lxml, trafilatura, extruct, pypdf, pydantic, tldextract | Their own OSS licences | Required dependencies, declared in `pyproject.toml` |
 | scrapy, scrapy-playwright | Optional `crawler` extra | Not installed for the submitted run |
 | transformers, torch, accelerate | Optional `sentiment` extra | Not installed for the submitted run |

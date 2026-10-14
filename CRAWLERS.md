@@ -11,15 +11,41 @@ what gets fetched, in what order, how failures are handled, what is cached, and 
 | Adapter | Module | Targets | Requests per company |
 | --- | --- | --- | --- |
 | Registry | `registry.py` | `data.brreg.no` entity, roles, subunits, group structure, annual accounts | ~4 |
+| NAV vacancies | `nav_jobs.py` | `pam-stilling-feed.nav.no` vacancy feed and ad records | 0–15 per company, plus a shared feed refresh per run |
 | Website | `website.py` | The company's own site, `robots.txt` first | 0–6 |
 
-That is the complete list. Nothing else is contacted. `out/eval100b-report.json` records every
-host reached in the 100-company run: `data.brreg.no` (447 requests) and company hostnames.
+That is the complete list. Nothing else is contacted. Each run report records every host
+reached under `budget.top_hosts`.
 
 Adapters that exist but are **not wired in** — Brave search, LinkedIn guest endpoints, Google
 News RSS, YouTube, Fagfolkguiden, Scrapy/Playwright — live under `scripts/` and are listed with
 their reasons in [`SOURCE_RIGHTS.md`](SOURCE_RIGHTS.md#disabled-connectors). They are not
 imported by `main.py` or `runner.py`.
+
+## NAV vacancies
+
+NAV's vacancy register names each ad's employer by organisation number, which makes it the
+one jobs source that matches a company exactly without a website. The feed API cannot be
+queried by employer, so the adapter works from a declared cache:
+
+1. **Cache** — `data/nav/nav-job-index.json.gz`, built by
+   `scripts/signalpost/build_nav_job_index.py`: every ad active when it was built, with the
+   employer organisation number from the ad's own record, and the feed cursor at build time.
+2. **Refresh, once per run** — a background thread reads the feed forward from that cursor to
+   its end (at most `MAX_REFRESH_PAGES = 80` pages), so ads published, stopped or expired
+   since the cache was built are known before companies reach this stage.
+3. **Per company** — ads whose employer number is the company's or one of its registered
+   workplaces' (`underenheter`) are candidates; so are ads added since the cache whose display
+   name equals one of the company's registered names. At most `MAX_ADS_PER_COMPANY = 15`.
+4. **Verification and evidence** — each candidate's ad record is read during the run and
+   snapshotted. It is published only if NAV still lists it `ACTIVE` **and** its employer
+   number is in the company's set. The cache is never cited as evidence.
+
+The employer homepage on a verified ad also becomes a website candidate
+(`discovery.propose`, source `nav_employer_homepage`) and a supporting `official_listing`
+signal in the identity gate. It is one evidence group, not proof: the site still needs a
+second, independent group to be published. If the cache is missing, the adapter records
+`skipped` and makes no request.
 
 ## Registry adapter
 
@@ -208,15 +234,22 @@ line from a crash does not lose the intact lines before it
 
 ## Budgets
 
-The declared envelope is 100 inputs, 45 minutes, 2,000 outbound requests and $10 of third-party
-spend. `src/signalpost/budget.py` enforces all four.
+The locked envelope was 100 inputs, 45 minutes, 2,000 outbound requests and $10 of
+third-party spend. Builderr now supplies a shared batch of 1,000 companies (possibly 1,100)
+with a budget it sets. `src/signalpost/budget.py` enforces whatever caps the run is given;
+`runner.resolve_limits` decides them: a command-line flag, else the matching
+`SIGNALPOST_*` environment variable, else a default that scales with the batch.
 
 | Default | Value |
 | --- | --- |
-| `DEFAULT_MAX_REQUESTS` | 2000 |
-| `DEFAULT_MAX_SECONDS` | 2700 (45 min) |
-| `DEFAULT_MAX_SPEND_USD` | 10.0 |
+| Requests | 20 per input (the locked 2,000-per-100 ratio), never below 2,000 |
+| Wall clock | 2,700 s (45 min) |
+| Spend | $10.00 (actual: $0.00) |
+| Concurrency | 8, or 24 when the batch has more than 200 inputs |
 | `DEFAULT_SOFT_RATIO` | 0.90 |
+
+A fixed 2,000-request default would have researched the first ~250 companies of a
+1,000-company batch and terminated the rest as `failed`.
 
 **Reservation before dispatch.** `reserve_request()` is a context manager that takes capacity
 under a single lock *before* the request is made, commits on a clean exit, and releases on an
@@ -305,7 +338,10 @@ denials; $0.00 under a $0.00 cap.
 - `robots.txt` is fetched and obeyed before any page on a host.
 - One identifying user-agent, with a contact URL, on every request (string in
   [`docs/SECURITY.md`](docs/SECURITY.md)).
-- 0.6 s minimum between requests to the same host (`fetch._HostThrottle`).
+- 0.6 s minimum between requests to the same company host (`fetch._HostThrottle`). The
+  Brønnøysund open-data API, a machine API every company calls four times, is paced at
+  0.1 s (`fetch.API_HOST_DELAYS`): at 0.6 s that single throttle took 2,410 s of a
+  2,539 s 1,000-company run.
 - At most 5 pages from any one company site, plus up to 2 corroboration pages.
 - 4 MB response cap and a 12 s timeout, so a misbehaving host cannot hold a worker.
 - Retries only on statuses that mean "try later".
