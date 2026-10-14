@@ -1,0 +1,12 @@
+{
+  "schema_version": "signalpost.idempotency_report/1",
+  "checked_at": "2026-10-13T18:49:04Z",
+  "input": "out/smoke100/envelopes.jsonl",
+  "input_sha256": "a76ad28e752b69ce2ab009816d1b6f922ddb55e45d7be5c24824d75f25fc13f9",
+  "method": "each envelope's claims diffed against the same envelope (offline)",
+  "companies": 100,
+  "claims_replayed": 5754,
+  "false_changes": 0,
+  "idempotent": true,
+  "offenders": []
+}

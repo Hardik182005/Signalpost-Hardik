@@ -1,0 +1,119 @@
+{
+  "schema_version": "signalpost.run_report/1",
+  "config": {
+    "run_id": "codex-final-20261014",
+    "inputs": 1100,
+    "output": "work/codex-improvement/final1100.jsonl",
+    "concurrency": 24,
+    "max_requests": 22000,
+    "max_seconds": 2700.0,
+    "max_spend_usd": 10.0,
+    "max_pages_per_company": 5,
+    "previous_snapshot": null,
+    "cutoff": null,
+    "include_financials": true,
+    "include_structure": true,
+    "resume": true,
+    "offline": false,
+    "pipeline_version": "1.0.0"
+  },
+  "results": {
+    "started_at": "2026-10-14T07:21:19Z",
+    "completed_at": "2026-10-14T07:31:44Z",
+    "envelopes": 1100,
+    "terminal_states": {
+      "completed": 198,
+      "partial": 902
+    },
+    "claims_available": 52397,
+    "claims_total": 62938,
+    "evidence_total": 52419,
+    "verified_websites": 198,
+    "verified_website_rate": 18.0,
+    "changes_total": 0,
+    "changes_material": 0,
+    "seconds_per_company": {
+      "median": 7.04,
+      "p90": 27.83,
+      "max": 276.48
+    },
+    "budget_exhausted_after": null
+  },
+  "budget": {
+    "requests_used": 8537,
+    "max_requests": 22000,
+    "requests_per_company": 7.76,
+    "seconds_elapsed": 624.9,
+    "max_seconds": 2700.0,
+    "spend_usd": 0.0,
+    "max_spend_usd": 10.0,
+    "denials": {},
+    "nav_job_index": {
+      "index": "nav-job-index.json.gz",
+      "loaded": true,
+      "built_at": "2026-10-13T18:53:01Z",
+      "cursor_at_build": "0da858d0-0cf4-46f0-b556-0fefbcdd9a14",
+      "ads_in_index": 10394,
+      "refresh_pages": 3,
+      "refresh_changes": 1022,
+      "cursor_now": "828604eb-3dfb-4fbc-978b-7b8ea9c6f528",
+      "active_ads": 10213
+    },
+    "by_purpose": {
+      "robots": 1837,
+      "nav_token": 1,
+      "registry_entity": 1100,
+      "nav_feed": 3,
+      "registry_roles": 1100,
+      "registry_accounts": 1100,
+      "registry_subunits": 1100,
+      "website_landing": 1535,
+      "website_contact": 176,
+      "website_about": 137,
+      "website_news": 93,
+      "website_services": 80,
+      "website_team": 25,
+      "website_corroboration": 199,
+      "website_careers": 39,
+      "nav_job_detail": 12
+    },
+    "top_hosts": {
+      "data.brreg.no": 4448,
+      "navn.no": 31,
+      "pam-stilling-feed.nav.no": 17,
+      "www.hugedomains.com": 17,
+      "www.spminstrument.com": 17,
+      "www.hjelles.no": 16,
+      "www.gobb.no": 15,
+      "www.boreal.no": 15,
+      "www.axessgroup.com": 14,
+      "www.nordicpaintball.com": 14,
+      "www.oslobulk.no": 13,
+      "mestergruppen.no": 12,
+      "www.timit.no": 12,
+      "vikenmathus.no": 12,
+      "www.fortiusprosjekt.no": 12
+    }
+  },
+  "verification": {
+    "checked_at": "2026-10-14T07:31:44Z",
+    "path": "work/codex-improvement/final1100.jsonl",
+    "envelopes": 1100,
+    "unique_companies": 1100,
+    "terminal_states": {
+      "completed": 198,
+      "partial": 902
+    },
+    "duplicates": [],
+    "invalid_terminal_states": [],
+    "envelopes_missing_required_keys": [],
+    "expected": 1100,
+    "missing": [],
+    "missing_count": 0,
+    "unexpected": [],
+    "unexpected_count": 0,
+    "exactly_one_per_input": true,
+    "ok": true
+  },
+  "official_qualification": "not_determined"
+}

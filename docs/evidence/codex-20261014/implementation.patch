@@ -1,0 +1,388 @@
+--- a/src/signalpost/discovery.py
++++ b/src/signalpost/discovery.py
+@@ -28,7 +28,7 @@
+ 
+ import re
+ import unicodedata
+-from dataclasses import dataclass, field
++from dataclasses import dataclass, field, replace
+ from typing import Iterable
+ 
+ from .identity import (
+@@ -304,6 +304,29 @@
+         top_stem, rationale, _ = stems[0]
+         add(f"https://{top_stem}.com", "name_guess", f".com domain from the {rationale}", 0.30)
+ 
++    # Registry workplace URLs and historical/trading names are discovery hints only.
++    # They never become parent-company identity evidence: the existing gate must
++    # independently verify the current legal entity on the fetched site.
++    for listed in identity.discovery_websites[:5]:
++        add(listed, "registry_subunit", "Website listed for a registered workplace", 0.75)
++
++    # Some sites retain the legal suffix in their domain (e.g. exampleas.no).
++    tokens = name_tokens_for_domain(identity.legal_name, ascii_only=True)
++    if tokens and identity.legal_name.casefold().strip().endswith(" as"):
++        stem = "".join(tokens)
++        for suffix in ("as", "-as"):
++            if _valid_stem(stem + suffix):
++                add(f"https://{stem}{suffix}.no", "name_guess",
++                    "Company name with AS retained in the domain", 0.29)
++
++    aliases = list(dict.fromkeys([*identity.former_names[:3], *identity.subunit_names[:5]]))
++    for name in aliases:
++        if name_tokens_for_domain(name, ascii_only=True) == tokens:
++            continue
++        for stem, rationale, _ in domain_stems(replace(identity, legal_name=name))[:3]:
++            add(f"https://{stem}.no", "registered_name_guess",
++                f"Domain inferred from registered former/workplace name {name!r}: {rationale}", 0.28)
++
+     candidates.sort(key=lambda item: -item.prior)
+     return candidates
+ 
+--- a/src/signalpost/identity.py
++++ b/src/signalpost/identity.py
+@@ -278,6 +278,7 @@
+     # Websites an official register lists for this exact organisation number other than
+     # Enhetsregisteret itself — today, the employer homepage on the company's NAV vacancies.
+     listed_websites: list[str] = field(default_factory=list)
++    discovery_websites: list[str] = field(default_factory=list)
+ 
+     @property
+     def all_names(self) -> list[str]:
+@@ -314,6 +315,8 @@
+                 if value.get("street"):
+                     identity.street_addresses.add(normalise_name(value["street"]))
+             elif claim.field == "subunit" and isinstance(value, dict):
++                if value.get("website"):
++                    identity.discovery_websites.append(str(value["website"]))
+                 number = value.get("organisation_number")
+                 if number:
+                     identity.subunit_numbers.add(str(number))
+@@ -453,7 +456,14 @@
+ 
+         lowered_text = text.casefold()
+         normalised_text = normalise_name(text[:200_000])
+-        registered_text = normalise_registered_name(f"{page_title}\n{text[:200_000]}")
++        raw_registered_text = f"{page_title}\n{text[:200_000]}"
++        registered_text = normalise_registered_name(raw_registered_text)
++        # English "Greystone as a result ..." is not the legal entity GREYSTONE AS.
++        # Preserve uppercase AS and the explicit A/S spelling as legal-form evidence;
++        # ordinary lowercase/title-case prose still contributes only a name match.
++        legal_as_text = normalise_registered_name(
++            re.sub(r"\b(?:as|As)\b", "legalformnotestablished", raw_registered_text)
++        )
+         stem_only_match: str | None = None
+         registered_match = False
+         for name in self.identity.all_names:
+@@ -462,7 +472,8 @@
+                 continue
+             form = legal_form(name)
+             written = (f"{stem} {form}", f"{form} {stem}") if form else (stem,)
+-            if any(_contains_phrase(registered_text, phrase) for phrase in written):
++            exact_text = legal_as_text if form == "as" else registered_text
++            if any(_contains_phrase(exact_text, phrase) for phrase in written):
+                 key = "exact_legal_name" if name == self.identity.legal_name else "former_name"
+                 weight = self.SUPPORTING_WEIGHTS[key]
+                 signals.append(
+--- a/src/signalpost/registry.py
++++ b/src/signalpost/registry.py
+@@ -672,6 +672,7 @@
+                     value={
+                         "organisation_number": number,
+                         "name": name,
++                        "website": _clean(unit.get("hjemmeside")),
+                         "employees": unit.get("antallAnsatte")
+                         if unit.get("harRegistrertAntallAnsatte") is not False
+                         else None,
+--- a/src/signalpost/website.py
++++ b/src/signalpost/website.py
+@@ -16,6 +16,7 @@
+ 
+ from __future__ import annotations
+ 
++import re
+ from dataclasses import dataclass, field
+ from datetime import date
+ from typing import Any, Iterable
+@@ -27,7 +28,7 @@
+ from .fetch import Fetcher, Response
+ from .identity import CompanyIdentity, IdentityResolver, IdentityVerdict
+ from .models import Claim, Evidence, Locator, Snapshot, claim_key, stable_id
+-from .net import canonical_url, registrable_domain
++from .net import canonical_url, registrable_domain, same_site
+ 
+ # Crawl order: the pages most likely to carry scored facts come first, so a company
+ # that runs out of budget still gets the highest-value pages.
+@@ -129,6 +130,10 @@
+ 
+         cited = {canonical_url(page.response.final_url) for page in visits}
+         for page in result.corroboration:
++            # Legal notices corroborate ownership but may list external privacy
++            # officers, processors, and hosting contacts. Do not extract their contacts.
++            if page.kind == "legal":
++                continue
+             if canonical_url(page.response.final_url) not in cited:
+                 visits.append(page)
+                 result.pages.append(canonical_url(page.response.final_url))
+@@ -215,6 +220,9 @@
+                 )
+                 continue
+ 
++            # Registry authority applies to its listed domain, not an arbitrary
++            # cross-domain redirect (expired domains may redirect to a new owner).
++            from_registry = from_registry and same_site(url, response.final_url)
+             verdict = resolver.assess_website(
+                 response.final_url,
+                 page_text=visit.text,
+@@ -262,8 +270,13 @@
+         planned: dict[str, str] = {}
+         for url, anchor in H.links(landing.soup, base):
+             kind = F.classify_link(url, anchor)
+-            if registrable_domain(url) != home or kind not in CORROBORATION_KINDS:
+-                continue
++            if registrable_domain(url) != home:
++                continue
++            if kind not in CORROBORATION_KINDS:
++                if re.search(r"personvern|privacy|impressum|vilkår|vilkar|terms", f"{url} {anchor}", re.I):
++                    kind = "legal"
++                else:
++                    continue
+             canonical = canonical_url(url)
+             if canonical != canonical_url(base) and canonical not in planned:
+                 planned[canonical] = kind
+@@ -271,7 +284,9 @@
+             return verdict
+ 
+         pages: list[PageVisit] = []
+-        for url, kind in list(planned.items())[:CORROBORATION_PAGES]:
++        ordinary = [(url, kind) for url, kind in planned.items() if kind != "legal"]
++        legal = [(url, kind) for url, kind in planned.items() if kind == "legal"]
++        for url, kind in [*ordinary[:CORROBORATION_PAGES], *legal[:1]]:
+             if self.fetcher.budget.should_stop_discretionary():
+                 break
+             try:
+@@ -294,6 +309,26 @@
+         )
+         if not combined.publishable:
+             return combined if combined.conflicts else verdict
++        # Legal notices often enumerate overseas affiliates with identical names.
++        # Name-only corroboration from such a notice cannot establish the Norwegian
++        # entity. Require its number or a non-name discriminator already in the gate.
++        if any(page.kind == "legal" for page in pages):
++            decisive = any(signal.strength == "decisive" for signal in combined.signals)
++            independent = any(signal.name in {"phone", "email_domain", "street_address",
++                                              "postal_code", "official_listing"}
++                              for signal in combined.signals)
++            if not decisive and not independent:
++                ordinary = [landing, *(page for page in pages if page.kind != "legal")]
++                without_legal = resolver.assess_website(
++                    base, page_text="\n".join(page.text for page in ordinary), page_title=title,
++                    emails=[str(i.value) for page in ordinary for i in F.extract_emails(page.soup, page.text)],
++                    phones=[str(i.value) for page in ordinary for i in F.extract_phones(page.soup, page.text)],
++                    from_registry=from_registry,
++                )
++                if not without_legal.publishable:
++                    return without_legal
++                combined = without_legal
++                pages = [page for page in pages if page.kind != "legal"]
+         combined.reason = (
+             f"{combined.reason}; corroborated on "
+             f"{', '.join(canonical_url(page.response.final_url) for page in pages)}"
+--- a/src/signalpost/synthesis.py
++++ b/src/signalpost/synthesis.py
+@@ -16,6 +16,7 @@
+ 
+ from __future__ import annotations
+ 
++import math
+ from dataclasses import dataclass, field
+ from typing import Any, Iterable
+ 
+@@ -292,78 +293,99 @@
+     subunits = [item for item in _by_field(claims, "subunit") if isinstance(item.value, dict)]
+     if subunits:
+         cities = sorted({str(item.value.get("city")).title() for item in subunits if item.value.get("city")})
+-        keys.extend(item.claim_key for item in subunits[:6])
++        keys.extend(item.claim_key for item in subunits)
+         where = f" in {', '.join(cities[:4])}{' and more' if len(cities) > 4 else ''}" if cities else ""
+-        parts.append(f"{len(subunits)} registered workplace{'s' if len(subunits) != 1 else ''}{where}")
++        total = _first(claims, "subunit_count")
++        count = total.value if total is not None and isinstance(total.value, int) else len(subunits)
++        if total is not None:
++            keys.append(total.claim_key)
++        qualifier = f"; {len(subunits)} detailed in this profile{where}" if count > len(subunits) else where
++        parts.append(f"{count} registered workplace{'s' if count != 1 else ''}{qualifier}")
+     if not parts:
+         return None
+     return Sentence(f"Scale: {'; '.join(parts)}.", keys, "scale")
+ 
+ 
+ def _ratio(numerator: Claim | None, denominator: Claim | None) -> float | None:
++    if numerator is None or denominator is None:
++        return None
++    if any(getattr(numerator, key) != getattr(denominator, key)
++           for key in ("scope", "reporting_period", "currency", "unit")):
++        return None
+     try:
+-        top, bottom = float(numerator.value), float(denominator.value)  # type: ignore[union-attr]
+-    except (AttributeError, TypeError, ValueError):
+-        return None
+-    return top / bottom if bottom else None
++        top, bottom = float(numerator.value), float(denominator.value)
++    except (TypeError, ValueError):
++        return None
++    return top / bottom if bottom and math.isfinite(top) and math.isfinite(bottom) else None
+ 
+ 
+ def _financial_sentence(claims: list[Claim]) -> Sentence | None:
+-    revenue = _company_scoped(claims, "revenue")
+-    profit = _company_scoped(claims, "net_profit") or _company_scoped(claims, "profit_before_tax")
+-    anchor = (revenue or profit or [None])[0]
+-    if anchor is None:
+-        return None
+-    period = anchor.reporting_period
++    # Choose one reporting scope for the entire sentence; missing company figures
++    # must never be filled with consolidated group figures.
++    financial_fields = {"revenue", "net_profit", "profit_before_tax", "operating_profit",
++                        "total_equity", "total_assets", "accounts_audited"}
++    figures = [item for item in _available(claims) if item.field in financial_fields]
++    anchors = [item for item in figures if item.field in {"revenue", "net_profit", "profit_before_tax"}]
++    own = [item for item in anchors if item.scope == "company"]
++    anchors = own or [item for item in anchors if item.scope == "group"]
++    if not anchors:
++        return None
++    anchor = max(anchors, key=lambda item: item.reporting_period or "")
++    period, scope = anchor.reporting_period, anchor.scope
+     year = _year((period or "").split("/")[-1]) or "the latest filed year"
+ 
+-    def same_period(items: list[Claim]) -> Claim | None:
+-        return next((item for item in items if item.reporting_period == period), None)
++    def figure(field: str) -> Claim | None:
++        return next((item for item in figures if item.field == field
++                     and item.reporting_period == period and item.scope == scope), None)
+ 
+     keys: list[str] = []
+     parts: list[str] = []
+-    latest_revenue = same_period(revenue)
+-    if latest_revenue is not None:
+-        keys.append(latest_revenue.claim_key)
+-        parts.append(f"revenue of {_format_money(latest_revenue.value, latest_revenue.currency)}")
+-    operating = same_period(_company_scoped(claims, "operating_profit"))
+-    if operating is not None:
+-        keys.append(operating.claim_key)
+-        parts.append(f"an operating result of {_format_money(operating.value, operating.currency)}")
+-    net = same_period(profit)
+-    if net is not None:
+-        keys.append(net.claim_key)
+-        label = "a net result" if net.field == "net_profit" else "a pre-tax result"
+-        parts.append(f"{label} of {_format_money(net.value, net.currency)}")
+-    text = f"In its filed accounts for {year}, it reported {_join(parts)}"
++    latest_revenue = figure("revenue")
++    operating = figure("operating_profit")
++    net = figure("net_profit") or figure("profit_before_tax")
++    for item, label in ((latest_revenue, "revenue"), (operating, "an operating result"),
++                        (net, "a net result" if net and net.field == "net_profit" else "a pre-tax result")):
++        if item is not None:
++            keys.append(item.claim_key)
++            parts.append(f"{label} of {_format_money(item.value, item.currency)}")
++    subject = "the group" if scope == "group" else "the company"
++    text = f"In its filed accounts for {year}, {subject} reported {_join(parts)}"
+ 
+     derived: list[str] = []
+     margin = _ratio(operating, latest_revenue)
+     if margin is not None and latest_revenue is not None and float(latest_revenue.value) > 0:
+         derived.append(f"an operating margin of {margin * 100:.1f}%")
+-    equity = same_period(_company_scoped(claims, "total_equity"))
+-    assets = same_period(_company_scoped(claims, "total_assets"))
++    equity, assets = figure("total_equity"), figure("total_assets")
+     equity_ratio = _ratio(equity, assets)
+-    if equity_ratio is not None and equity is not None and assets is not None:
++    if equity_ratio is not None and equity is not None and assets is not None and float(assets.value) > 0:
+         keys.extend([equity.claim_key, assets.claim_key])
+         derived.append(f"an equity ratio of {equity_ratio * 100:.0f}%")
+         if float(equity.value) < 0:
+             derived.append("negative equity")
+     if derived:
+         text += f"; calculated from those figures, that is {_join(derived)}"
+-    audited = same_period(_by_field(claims, "accounts_audited"))
++    audited = figure("accounts_audited")
+     if audited is not None and audited.value is False:
+         keys.append(audited.claim_key)
+         text += " (the accounts were not audited)"
+-    if len(revenue) > 1 and latest_revenue is not None:
+-        older = revenue[1]
+-        try:
+-            change = (float(latest_revenue.value) - float(older.value)) / abs(float(older.value)) * 100
+-        except (TypeError, ValueError, ZeroDivisionError):
+-            change = None
+-        if change is not None:
+-            keys.append(older.claim_key)
+-            text += f"; revenue was {'up' if change >= 0 else 'down'} {abs(change):.0f}% on the year before"
++    if latest_revenue is not None and period:
++        older = sorted((item for item in figures if item.field == "revenue"
++                        and item.scope == scope and item.reporting_period
++                        and item.reporting_period < period
++                        and item.currency == latest_revenue.currency
++                        and item.unit == latest_revenue.unit),
++                       key=lambda item: item.reporting_period, reverse=True)
++        if older:
++            previous = older[0]
++            try:
++                old, new = float(previous.value), float(latest_revenue.value)
++                change = (new - old) / old * 100 if old > 0 and math.isfinite(old) and math.isfinite(new) else None
++            except (TypeError, ValueError):
++                change = None
++            if change is not None:
++                keys.append(previous.claim_key)
++                previous_period = previous.reporting_period
++                text += f"; revenue was {'up' if change >= 0 else 'down'} {abs(change):.0f}% versus the reported period {previous_period}"
+     return Sentence(text + ".", keys, "financials")
+ 
+ 
+@@ -393,7 +415,7 @@
+         keys.append(website.claim_key)
+         parts.append(f"a verified website at {website.value}")
+     if socials:
+-        keys.extend(item.claim_key for item in socials[:6])
++        keys.extend(item.claim_key for item in socials)
+         networks = sorted(
+             {
+                 PLATFORM_NAMES.get(str(item.value.get("platform")), str(item.value.get("platform")).title())
+@@ -444,7 +466,7 @@
+         more = f" and {len(jobs) - len(titles)} more" if len(jobs) > len(titles) else ""
+         return Sentence(
+             f"It appears to be hiring: {len(jobs)} open role{'s' if len(jobs) != 1 else ''} listed, including {', '.join(titles)}{more}.",
+-            [item.claim_key for item in jobs[:3]],
++            [item.claim_key for item in jobs],
+             "jobs",
+         )
+     signal = _first(claims, "is_hiring")
+@@ -478,7 +500,7 @@
+     count = f"{len(items)} dated items; the latest" if len(items) > 1 else "One dated item"
+     return Sentence(
+         f"Recent public activity: {count}{stamp} was \"{_clip(str(value.get('title')), 140)}\".",
+-        [newest.claim_key],
++        [item.claim_key for item in items],
+         "activity",
+     )
+ 
+@@ -501,7 +523,7 @@
+     more = f" and {len(material) - 3} more" if len(material) > 3 else ""
+     return Sentence(
+         f"Since the previous run: {len(material)} material change{'s' if len(material) != 1 else ''} ({', '.join(described)}{more}).",
+-        [str(item.get("claim_key")) for item in material[:6] if item.get("claim_key")],
++        [str(item.get("claim_key")) for item in material if item.get("claim_key")],
+         "changes",
+     )
+ 
+@@ -546,6 +568,10 @@
+         if claim.availability in ("available", "not_applicable"):
+             continue
+         if claim.field in available_fields:
++            continue
++        if claim.field == "site_contact" and {"email", "phone"} & available_fields:
++            continue
++        if claim.field == "job_postings" and "job_posting" in available_fields:
+             continue
+         label = f"{claim.field}: {claim.availability}"
+         if claim.reason:

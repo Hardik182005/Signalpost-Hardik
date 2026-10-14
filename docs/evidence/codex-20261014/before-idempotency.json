@@ -1,0 +1,12 @@
+{
+  "schema_version": "signalpost.idempotency_report/1",
+  "checked_at": "2026-10-14T07:24:50Z",
+  "input": "work/codex-improvement/before-holdout.jsonl",
+  "input_sha256": "7d8f91e4d0e101a556156cb365768a912371d75d2da43e319fa535d2b0e4606d",
+  "method": "each envelope's claims diffed against the same envelope (offline)",
+  "companies": 100,
+  "claims_replayed": 5754,
+  "false_changes": 0,
+  "idempotent": true,
+  "offenders": []
+}

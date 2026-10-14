@@ -1,0 +1,13 @@
+{
+  "base": "final1100.jsonl",
+  "recheck": "precision-recheck.jsonl",
+  "rechecked_organisations": [
+    "935654866",
+    "920257399",
+    "826389702",
+    "914080088",
+    "929245741"
+  ],
+  "reason": "The last change tightens only name-only legal-page corroboration; all potentially affected accepted websites were rerun with the final source. Other envelopes retain the preceding full live run. This is an explicitly composed evaluation dataset, not a single run.",
+  "companies": 1100
+}

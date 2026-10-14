@@ -1,0 +1,22 @@
+{
+  "src/signalpost/discovery.py": {
+    "before_sha256": "28f3f27edce1a8ec05d7e436105409cc5a7fb21959050233201ba24cb1760be0",
+    "after_sha256": "1813d568a2dbef7b17cb393daf3ad722a45a75428f9753ba0ba74ac03b7814d6"
+  },
+  "src/signalpost/identity.py": {
+    "before_sha256": "4945b5986b5b6f2f4acbb491837c348ffacc3ba24d8dcf617ee5bcbee1ccb999",
+    "after_sha256": "1d4af8ec19a42b776b10a747e3eb3fdd7a7ef4791b286f8dffad8a04e16c896b"
+  },
+  "src/signalpost/registry.py": {
+    "before_sha256": "15a2c0f58f6b8f7be12cbdded68d1d496c7391e4272205d3437537d4b4772adc",
+    "after_sha256": "a8841a44833f97a52ca30f6768ac69ec2cf97f76fb0b4f366802a904abe19370"
+  },
+  "src/signalpost/website.py": {
+    "before_sha256": "5185b985c662cdc425c578adf4a4bf0422ac839b597200bdc9b7f2dd4b580ae6",
+    "after_sha256": "8d4c255723c201e4654f921109890bc44111420770281aa691edab8f35ebfa67"
+  },
+  "src/signalpost/synthesis.py": {
+    "before_sha256": "2f70d56981f5366feb36476170542a4bf13f1dc83b5b5d636b9212f9d18b5ca1",
+    "after_sha256": "6dbf627e6645662bc181bc07172bdd39d971e011d05368cbd48062b165f1da35"
+  }
+}

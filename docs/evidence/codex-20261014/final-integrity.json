@@ -1,0 +1,69 @@
+{
+  "schema_version": "signalpost.integrity_report/1",
+  "checked_at": "2026-10-14T07:32:55Z",
+  "input": "work/codex-improvement/validated1100.jsonl",
+  "input_sha256": "2249dce6200ecddd6ea38ede086564fae42ad772d7c6955f8bf2defd449686c1",
+  "network_requests": 0,
+  "totals": {
+    "envelopes": 1100,
+    "claims": 62925,
+    "claims_available": 52373,
+    "financial_claims_available": 26684,
+    "financial_amounts_available": 23626,
+    "evidence": 52389,
+    "snapshots": 4993
+  },
+  "claim_availability": {
+    "available": 52373,
+    "not_available": 9706,
+    "ambiguous": 816,
+    "blocked": 30
+  },
+  "available_claims_by_family": {
+    "activity": 197,
+    "business_description": 179,
+    "contact": 1322,
+    "financials": 26684,
+    "jobs": 30,
+    "legal_identity": 15975,
+    "locations": 3155,
+    "people": 4430,
+    "web_presence": 401
+  },
+  "companies_with_available_family": {
+    "activity": 27,
+    "business_description": 179,
+    "contact": 436,
+    "financials": 1100,
+    "jobs": 17,
+    "legal_identity": 1100,
+    "locations": 1096,
+    "people": 1095,
+    "web_presence": 195
+  },
+  "snapshot_bodies_rehashed": 4985,
+  "problems": {},
+  "problem_examples": {},
+  "ok": true,
+  "note": "Automated integrity only. This does not measure whether a claim is true or attributed to the right company; that needs independent review.",
+  "cardinality": {
+    "checked_at": "2026-10-14T07:32:55Z",
+    "path": "work/codex-improvement/validated1100.jsonl",
+    "envelopes": 1100,
+    "unique_companies": 1100,
+    "terminal_states": {
+      "completed": 195,
+      "partial": 905
+    },
+    "duplicates": [],
+    "invalid_terminal_states": [],
+    "envelopes_missing_required_keys": [],
+    "expected": 1100,
+    "missing": [],
+    "missing_count": 0,
+    "unexpected": [],
+    "unexpected_count": 0,
+    "exactly_one_per_input": true,
+    "ok": true
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "schema_version": "signalpost.integrity_report/1",
+  "checked_at": "2026-10-14T07:24:50Z",
+  "input": "work/codex-improvement/before-holdout.jsonl",
+  "input_sha256": "7d8f91e4d0e101a556156cb365768a912371d75d2da43e319fa535d2b0e4606d",
+  "network_requests": 0,
+  "totals": {
+    "envelopes": 100,
+    "claims": 5754,
+    "claims_available": 4761,
+    "financial_claims_available": 2460,
+    "financial_amounts_available": 2176,
+    "evidence": 4761,
+    "snapshots": 434
+  },
+  "claim_availability": {
+    "available": 4761,
+    "not_available": 898,
+    "ambiguous": 95
+  },
+  "available_claims_by_family": {
+    "activity": 7,
+    "business_description": 14,
+    "contact": 99,
+    "financials": 2460,
+    "legal_identity": 1447,
+    "locations": 282,
+    "people": 417,
+    "web_presence": 35
+  },
+  "companies_with_available_family": {
+    "activity": 1,
+    "business_description": 14,
+    "contact": 39,
+    "financials": 100,
+    "legal_identity": 100,
+    "locations": 100,
+    "people": 100,
+    "web_presence": 14
+  },
+  "snapshot_bodies_rehashed": 434,
+  "problems": {},
+  "problem_examples": {},
+  "ok": true,
+  "note": "Automated integrity only. This does not measure whether a claim is true or attributed to the right company; that needs independent review.",
+  "cardinality": {
+    "checked_at": "2026-10-14T07:24:50Z",
+    "path": "work/codex-improvement/before-holdout.jsonl",
+    "envelopes": 100,
+    "unique_companies": 100,
+    "terminal_states": {
+      "completed": 14,
+      "partial": 86
+    },
+    "duplicates": [],
+    "invalid_terminal_states": [],
+    "envelopes_missing_required_keys": [],
+    "expected": 100,
+    "missing": [],
+    "missing_count": 0,
+    "unexpected": [],
+    "unexpected_count": 0,
+    "exactly_one_per_input": true,
+    "ok": true
+  }
+}

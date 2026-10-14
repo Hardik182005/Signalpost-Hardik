@@ -1,0 +1,117 @@
+{
+  "schema_version": "signalpost.run_report/1",
+  "config": {
+    "run_id": "codex-before-20261014",
+    "inputs": 100,
+    "output": "work/codex-improvement/before-holdout.jsonl",
+    "concurrency": 8,
+    "max_requests": 2000,
+    "max_seconds": 2700.0,
+    "max_spend_usd": 10.0,
+    "max_pages_per_company": 5,
+    "previous_snapshot": null,
+    "cutoff": null,
+    "include_financials": true,
+    "include_structure": true,
+    "resume": true,
+    "offline": false,
+    "pipeline_version": "1.0.0"
+  },
+  "results": {
+    "started_at": "2026-10-13T19:00:12Z",
+    "completed_at": "2026-10-13T19:02:51Z",
+    "envelopes": 100,
+    "terminal_states": {
+      "completed": 14,
+      "partial": 86
+    },
+    "claims_available": 4761,
+    "claims_total": 5754,
+    "evidence_total": 4761,
+    "verified_websites": 14,
+    "verified_website_rate": 14.0,
+    "changes_total": 0,
+    "changes_material": 0,
+    "seconds_per_company": {
+      "median": 6.61,
+      "p90": 19.77,
+      "max": 60.72
+    },
+    "budget_exhausted_after": null
+  },
+  "budget": {
+    "requests_used": 769,
+    "max_requests": 2000,
+    "requests_per_company": 7.69,
+    "seconds_elapsed": 159.0,
+    "max_seconds": 2700.0,
+    "spend_usd": 0.0,
+    "max_spend_usd": 10.0,
+    "denials": {},
+    "nav_job_index": {
+      "index": "nav-job-index.json.gz",
+      "loaded": true,
+      "built_at": "2026-10-13T18:53:01Z",
+      "cursor_at_build": "0da858d0-0cf4-46f0-b556-0fefbcdd9a14",
+      "ads_in_index": 10394,
+      "refresh_pages": 1,
+      "refresh_changes": 2,
+      "cursor_now": "0da858d0-0cf4-46f0-b556-0fefbcdd9a14",
+      "active_ads": 10394
+    },
+    "by_purpose": {
+      "robots": 185,
+      "registry_entity": 100,
+      "registry_roles": 100,
+      "nav_token": 1,
+      "registry_accounts": 100,
+      "registry_subunits": 100,
+      "nav_feed": 1,
+      "website_landing": 142,
+      "website_corroboration": 12,
+      "website_news": 10,
+      "website_contact": 8,
+      "website_about": 7,
+      "website_services": 1,
+      "website_careers": 2
+    },
+    "top_hosts": {
+      "data.brreg.no": 416,
+      "www.labo.no": 9,
+      "denlilleprikkenoverien.no": 7,
+      "www.cobgroup.no": 7,
+      "reskilt.no": 6,
+      "mp-energi.no": 6,
+      "magiskeindiareiser.no": 6,
+      "sjekkpunkt.no": 6,
+      "www.unicornvoice.com": 5,
+      "www.languageinfusion.no": 5,
+      "x-team.com": 5,
+      "hovelsrud.no": 5,
+      "xn--rddig-vua.no": 5,
+      "leotransport.no": 4,
+      "unicornsolutions.no": 4
+    }
+  },
+  "verification": {
+    "checked_at": "2026-10-13T19:02:51Z",
+    "path": "work/codex-improvement/before-holdout.jsonl",
+    "envelopes": 100,
+    "unique_companies": 100,
+    "terminal_states": {
+      "completed": 14,
+      "partial": 86
+    },
+    "duplicates": [],
+    "invalid_terminal_states": [],
+    "envelopes_missing_required_keys": [],
+    "expected": 100,
+    "missing": [],
+    "missing_count": 0,
+    "unexpected": [],
+    "unexpected_count": 0,
+    "exactly_one_per_input": true,
+    "ok": true
+  },
+  "official_qualification": "not_determined"
+}

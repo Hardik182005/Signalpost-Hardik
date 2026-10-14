@@ -1,0 +1,796 @@
+{
+  "matched_companies": 1000,
+  "before_only": [],
+  "after_only": [
+    "817661912",
+    "820618572",
+    "825759212",
+    "827043982",
+    "827585912",
+    "828171542",
+    "830842012",
+    "832236012",
+    "833743872",
+    "834660172",
+    "878698282",
+    "897060272",
+    "911873621",
+    "912062961",
+    "912238504",
+    "912253910",
+    "913049659",
+    "913058984",
+    "915455794",
+    "916574347",
+    "917365849",
+    "917457778",
+    "917945772",
+    "918551468",
+    "918851852",
+    "919477709",
+    "919529563",
+    "919656697",
+    "919687800",
+    "919767847",
+    "920188788",
+    "921201915",
+    "921215509",
+    "921553889",
+    "921824319",
+    "922200874",
+    "922456801",
+    "923377484",
+    "923761764",
+    "923831711",
+    "924587954",
+    "925368741",
+    "926191993",
+    "927233096",
+    "927828022",
+    "928794180",
+    "929474376",
+    "929837096",
+    "930520535",
+    "930905151",
+    "930995479",
+    "931446266",
+    "931798162",
+    "931955039",
+    "932010291",
+    "932333392",
+    "933545113",
+    "934058135",
+    "934231708",
+    "934861396",
+    "935167965",
+    "935641489",
+    "936010644",
+    "936157378",
+    "936355153",
+    "950553952",
+    "952263757",
+    "956434165",
+    "957855482",
+    "961898773",
+    "968912119",
+    "975341712",
+    "976217594",
+    "976250257",
+    "976732324",
+    "978630960",
+    "979541252",
+    "982072921",
+    "983142338",
+    "983945635",
+    "985073546",
+    "988293466",
+    "989186043",
+    "989244337",
+    "989263072",
+    "989690477",
+    "990884196",
+    "992109335",
+    "992879181",
+    "993011126",
+    "993061875",
+    "995243822",
+    "995427419",
+    "995498774",
+    "996516563",
+    "996975029",
+    "997038630",
+    "997874544",
+    "998075998",
+    "998867509"
+  ],
+  "before": {
+    "companies": 1000,
+    "verified_websites": 182,
+    "companies_with_available_field": {
+      "accounts_audited": 1000,
+      "activity_item": 26,
+      "address": 996,
+      "bankrupt": 996,
+      "business_description": 166,
+      "email": 321,
+      "employees": 149,
+      "former_name": 239,
+      "incorporated_at": 984,
+      "industry_code": 995,
+      "industry_label": 995,
+      "is_hiring": 11,
+      "job_posting": 13,
+      "legal_form_code": 1000,
+      "legal_form_label": 1000,
+      "legal_name": 1000,
+      "net_profit": 1000,
+      "operating_costs": 988,
+      "operating_profit": 989,
+      "organisation_number": 1000,
+      "phone": 285,
+      "profit_before_tax": 995,
+      "registered_activity": 996,
+      "registered_at": 996,
+      "registry_website": 122,
+      "revenue": 842,
+      "role": 995,
+      "sector_code": 975,
+      "site_address": 119,
+      "social_profile": 97,
+      "subunit": 765,
+      "subunit_count": 765,
+      "total_assets": 1000,
+      "total_equity": 1000,
+      "total_equity_and_liabilities": 1000,
+      "under_forced_liquidation": 996,
+      "under_liquidation": 996,
+      "vat_registered": 996,
+      "website": 182
+    },
+    "available_claims_by_field": {
+      "accounts_audited": 2774,
+      "activity_item": 174,
+      "address": 1225,
+      "bankrupt": 996,
+      "business_description": 166,
+      "email": 519,
+      "employees": 149,
+      "former_name": 332,
+      "incorporated_at": 984,
+      "industry_code": 995,
+      "industry_label": 995,
+      "is_hiring": 11,
+      "job_posting": 25,
+      "legal_form_code": 1000,
+      "legal_form_label": 1000,
+      "legal_name": 1000,
+      "net_profit": 2774,
+      "operating_costs": 2712,
+      "operating_profit": 2718,
+      "organisation_number": 1000,
+      "phone": 534,
+      "profit_before_tax": 2739,
+      "registered_activity": 996,
+      "registered_at": 996,
+      "registry_website": 122,
+      "revenue": 2189,
+      "role": 4013,
+      "sector_code": 975,
+      "site_address": 156,
+      "social_profile": 192,
+      "subunit": 883,
+      "subunit_count": 765,
+      "total_assets": 2774,
+      "total_equity": 2770,
+      "total_equity_and_liabilities": 2774,
+      "under_forced_liquidation": 996,
+      "under_liquidation": 996,
+      "vat_registered": 996,
+      "website": 182
+    },
+    "validation_problems": 14,
+    "requests_attributed_to_companies": 7438
+  },
+  "after": {
+    "companies": 1000,
+    "verified_websites": 181,
+    "companies_with_available_field": {
+      "accounts_audited": 1000,
+      "activity_item": 26,
+      "address": 996,
+      "bankrupt": 996,
+      "business_description": 165,
+      "email": 323,
+      "employees": 149,
+      "former_name": 239,
+      "incorporated_at": 984,
+      "industry_code": 995,
+      "industry_label": 995,
+      "is_hiring": 4,
+      "job_posting": 14,
+      "legal_form_code": 1000,
+      "legal_form_label": 1000,
+      "legal_name": 1000,
+      "net_profit": 1000,
+      "operating_costs": 988,
+      "operating_profit": 989,
+      "organisation_number": 1000,
+      "phone": 288,
+      "profit_before_tax": 995,
+      "registered_activity": 996,
+      "registered_at": 996,
+      "registry_website": 122,
+      "revenue": 842,
+      "role": 995,
+      "sector_code": 975,
+      "site_address": 121,
+      "social_profile": 96,
+      "subunit": 765,
+      "subunit_count": 765,
+      "total_assets": 1000,
+      "total_equity": 1000,
+      "total_equity_and_liabilities": 1000,
+      "under_forced_liquidation": 996,
+      "under_liquidation": 996,
+      "vat_registered": 996,
+      "website": 181
+    },
+    "available_claims_by_field": {
+      "accounts_audited": 2774,
+      "activity_item": 190,
+      "address": 1225,
+      "bankrupt": 996,
+      "business_description": 165,
+      "email": 524,
+      "employees": 149,
+      "former_name": 332,
+      "incorporated_at": 984,
+      "industry_code": 995,
+      "industry_label": 995,
+      "is_hiring": 4,
+      "job_posting": 26,
+      "legal_form_code": 1000,
+      "legal_form_label": 1000,
+      "legal_name": 1000,
+      "net_profit": 2774,
+      "operating_costs": 2712,
+      "operating_profit": 2718,
+      "organisation_number": 1000,
+      "phone": 540,
+      "profit_before_tax": 2739,
+      "registered_activity": 996,
+      "registered_at": 996,
+      "registry_website": 122,
+      "revenue": 2189,
+      "role": 4013,
+      "sector_code": 975,
+      "site_address": 159,
+      "social_profile": 185,
+      "subunit": 883,
+      "subunit_count": 765,
+      "total_assets": 2774,
+      "total_equity": 2770,
+      "total_equity_and_liabilities": 2774,
+      "under_forced_liquidation": 996,
+      "under_liquidation": 996,
+      "vat_registered": 996,
+      "website": 181
+    },
+    "validation_problems": 0,
+    "requests_attributed_to_companies": 7768
+  },
+  "websites": {
+    "gained": [
+      {
+        "organisation_number": "898321592",
+        "names": [
+          "GARANTUM WEALTH MANAGEMENT NORGE AS",
+          "JK SECURITIES AS",
+          "GARANTUM NORGE AS"
+        ],
+        "before": null,
+        "after": "https://www.garantum.no/",
+        "verdict": {
+          "candidate": "https://www.garantum.no/",
+          "decision": "published",
+          "confidence": 0.99,
+          "reason": "decisive signal: organisation_number_on_page",
+          "signals": [
+            {
+              "signal": "organisation_number_on_page",
+              "strength": "decisive",
+              "detail": "Page states organisation number 898321592",
+              "weight": 1.0
+            },
+            {
+              "signal": "exact_legal_name",
+              "strength": "supporting",
+              "detail": "Page names the registered entity 'GARANTUM WEALTH MANAGEMENT NORGE AS'",
+              "weight": 0.45
+            },
+            {
+              "signal": "name_in_page_title",
+              "strength": "supporting",
+              "detail": "Title matches: Garantum | Garantum",
+              "weight": 0.25
+            },
+            {
+              "signal": "distinctive_name_in_domain",
+              "strength": "supporting",
+              "detail": "Domain garantum.no contains a distinctive name token",
+              "weight": 0.4
+            }
+          ],
+          "conflicts": []
+        },
+        "rejected_candidates": []
+      },
+      {
+        "organisation_number": "920934927",
+        "names": [
+          "ATIC AS"
+        ],
+        "before": null,
+        "after": "https://aticas.no/",
+        "verdict": {
+          "candidate": "https://aticas.no/",
+          "decision": "published",
+          "confidence": 0.825,
+          "reason": "2 independent evidence groups (name, registered_name; score 1.10)",
+          "signals": [
+            {
+              "signal": "exact_legal_name",
+              "strength": "supporting",
+              "detail": "Page names the registered entity 'ATIC AS'",
+              "weight": 0.45
+            },
+            {
+              "signal": "name_in_page_title",
+              "strength": "supporting",
+              "detail": "Title matches: ATIC A/S",
+              "weight": 0.25
+            },
+            {
+              "signal": "distinctive_name_in_domain",
+              "strength": "supporting",
+              "detail": "Domain aticas.no contains a distinctive name token",
+              "weight": 0.4
+            }
+          ],
+          "conflicts": []
+        },
+        "rejected_candidates": [
+          {
+            "url": "https://atic.com/",
+            "source": "name_guess",
+            "decision": "unreachable",
+            "reason": "HTTP 525",
+            "status": 525
+          }
+        ]
+      },
+      {
+        "organisation_number": "934802934",
+        "names": [
+          "ARCTIC GOLF CHALLENGE AS",
+          "ARTIC GOLF CHALLENGE AS"
+        ],
+        "before": null,
+        "after": "https://www.arcticgolfchallenge.com/",
+        "verdict": {
+          "candidate": "https://www.arcticgolfchallenge.com/",
+          "decision": "published",
+          "confidence": 0.99,
+          "reason": "decisive signal: organisation_number_on_page; corroborated on https://www.arcticgolfchallenge.com/about-4-1, https://www.arcticgolfchallenge.com/about-1, https://www.arcticgolfchallenge.com/lead-collection",
+          "signals": [
+            {
+              "signal": "organisation_number_on_page",
+              "strength": "decisive",
+              "detail": "Page states organisation number 934802934",
+              "weight": 1.0
+            },
+            {
+              "signal": "exact_legal_name",
+              "strength": "supporting",
+              "detail": "Page names the registered entity 'ARCTIC GOLF CHALLENGE AS'",
+              "weight": 0.45
+            },
+            {
+              "signal": "name_in_page_title",
+              "strength": "supporting",
+              "detail": "Title matches: Arctic Golf Challenge | Golfturnering Norge",
+              "weight": 0.25
+            },
+            {
+              "signal": "distinctive_name_in_domain",
+              "strength": "supporting",
+              "detail": "Domain arcticgolfchallenge.com contains a distinctive name token",
+              "weight": 0.4
+            },
+            {
+              "signal": "postal_code",
+              "strength": "supporting",
+              "detail": "Page contains postal code 0484",
+              "weight": 0.3
+            },
+            {
+              "signal": "street_address",
+              "strength": "supporting",
+              "detail": "Page contains registered address 'nydalen alle 7'",
+              "weight": 0.35
+            },
+            {
+              "signal": "city",
+              "strength": "supporting",
+              "detail": "Page mentions 'oslo'",
+              "weight": 0.15
+            }
+          ],
+          "conflicts": []
+        },
+        "rejected_candidates": []
+      },
+      {
+        "organisation_number": "991577092",
+        "names": [
+          "MNB AS"
+        ],
+        "before": null,
+        "after": "https://www.xponella.no/",
+        "verdict": {
+          "candidate": "https://www.xponella.no/",
+          "decision": "published",
+          "confidence": 0.99,
+          "reason": "decisive signal: organisation_number_on_page",
+          "signals": [
+            {
+              "signal": "organisation_number_on_page",
+              "strength": "decisive",
+              "detail": "Page states organisation number 991577092",
+              "weight": 1.0
+            },
+            {
+              "signal": "street_address",
+              "strength": "supporting",
+              "detail": "Page contains registered address 'torvveien 5'",
+              "weight": 0.35
+            },
+            {
+              "signal": "city",
+              "strength": "supporting",
+              "detail": "Page mentions 'asker'",
+              "weight": 0.15
+            },
+            {
+              "signal": "phone",
+              "strength": "supporting",
+              "detail": "Page lists the registered phone number",
+              "weight": 0.4
+            }
+          ],
+          "conflicts": []
+        },
+        "rejected_candidates": []
+      }
+    ],
+    "lost": [
+      {
+        "organisation_number": "952541706",
+        "names": [
+          "AMALIE AS",
+          "REVISJONS CONSULT AS",
+          "AKTIV BISTAND AS"
+        ],
+        "before": "https://www.amalie.com/",
+        "after": null,
+        "verdict": {
+          "candidate": "https://amalie.no/",
+          "decision": "ambiguous",
+          "confidence": 0.45,
+          "reason": "evidence suggests a match but is not sufficient to publish",
+          "signals": [
+            {
+              "signal": "name_in_text",
+              "strength": "supporting",
+              "detail": "Page contains the name 'amalie' without its legal form",
+              "weight": 0.25
+            },
+            {
+              "signal": "name_in_page_title",
+              "strength": "supporting",
+              "detail": "Title matches: Amalie forlag",
+              "weight": 0.25
+            },
+            {
+              "signal": "distinctive_name_in_domain",
+              "strength": "supporting",
+              "detail": "Domain amalie.no contains a distinctive name token",
+              "weight": 0.4
+            }
+          ],
+          "conflicts": []
+        },
+        "rejected_candidates": [
+          {
+            "candidate": "https://amalie.no/",
+            "decision": "ambiguous",
+            "confidence": 0.45,
+            "reason": "evidence suggests a match but is not sufficient to publish",
+            "signals": [
+              {
+                "signal": "name_in_text",
+                "strength": "supporting",
+                "detail": "Page contains the name 'amalie' without its legal form",
+                "weight": 0.25
+              },
+              {
+                "signal": "name_in_page_title",
+                "strength": "supporting",
+                "detail": "Title matches: Amalie forlag",
+                "weight": 0.25
+              },
+              {
+                "signal": "distinctive_name_in_domain",
+                "strength": "supporting",
+                "detail": "Domain amalie.no contains a distinctive name token",
+                "weight": 0.4
+              }
+            ],
+            "conflicts": [],
+            "source": "name_guess"
+          },
+          {
+            "candidate": "https://www.amalie.com/",
+            "decision": "ambiguous",
+            "confidence": 0.45,
+            "reason": "evidence suggests a match but is not sufficient to publish",
+            "signals": [
+              {
+                "signal": "name_in_text",
+                "strength": "supporting",
+                "detail": "Page contains the name 'amalie' without its legal form",
+                "weight": 0.25
+              },
+              {
+                "signal": "name_in_page_title",
+                "strength": "supporting",
+                "detail": "Title matches: Home - AMALIE Motor Oil",
+                "weight": 0.25
+              },
+              {
+                "signal": "distinctive_name_in_domain",
+                "strength": "supporting",
+                "detail": "Domain amalie.com contains a distinctive name token",
+                "weight": 0.4
+              }
+            ],
+            "conflicts": [],
+            "source": "name_guess"
+          }
+        ]
+      },
+      {
+        "organisation_number": "958298889",
+        "names": [
+          "DARRES GATE 2 KS",
+          "KS EIENDOMSPART DARRESGATE 2",
+          "DARRESGT 2 KS",
+          "ABERDEEN DARRES GATE 2 KS"
+        ],
+        "before": "https://heimstaden.com/no",
+        "after": null,
+        "verdict": null,
+        "rejected_candidates": [
+          {
+            "candidate": "https://heimstaden.com/no",
+            "decision": "rejected",
+            "confidence": 0.075,
+            "reason": "insufficient identity evidence",
+            "signals": [
+              {
+                "signal": "city",
+                "strength": "supporting",
+                "detail": "Page mentions 'oslo'",
+                "weight": 0.15
+              }
+            ],
+            "conflicts": [],
+            "source": "registry"
+          },
+          {
+            "url": "http://darresgate2.no/",
+            "source": "name_guess",
+            "decision": "rejected",
+            "reason": "domain resolves to a parking or placeholder page ('domeneshop')"
+          }
+        ]
+      },
+      {
+        "organisation_number": "987903244",
+        "names": [
+          "HAGMANS NORDIC AB NUF",
+          "HAGMANS KEMI NORGE AB"
+        ],
+        "before": "https://www.hagmans.se/no",
+        "after": null,
+        "verdict": {
+          "candidate": "https://www.hagmans.se/no",
+          "decision": "ambiguous",
+          "confidence": 0.325,
+          "reason": "evidence suggests a match but is not sufficient to publish",
+          "signals": [
+            {
+              "signal": "name_in_page_title",
+              "strength": "supporting",
+              "detail": "Title matches: Rustbeskyttelse, Bilpleie, Sparkel, Tekniske sprayer, Spraymax | Hagmans Kemi",
+              "weight": 0.25
+            },
+            {
+              "signal": "distinctive_name_in_domain",
+              "strength": "supporting",
+              "detail": "Domain hagmans.se contains a distinctive name token",
+              "weight": 0.4
+            }
+          ],
+          "conflicts": []
+        },
+        "rejected_candidates": [
+          {
+            "candidate": "https://www.hagmans.se/no",
+            "decision": "ambiguous",
+            "confidence": 0.325,
+            "reason": "evidence suggests a match but is not sufficient to publish",
+            "signals": [
+              {
+                "signal": "name_in_page_title",
+                "strength": "supporting",
+                "detail": "Title matches: Rustbeskyttelse, Bilpleie, Sparkel, Tekniske sprayer, Spraymax | Hagmans Kemi",
+                "weight": 0.25
+              },
+              {
+                "signal": "distinctive_name_in_domain",
+                "strength": "supporting",
+                "detail": "Domain hagmans.se contains a distinctive name token",
+                "weight": 0.4
+              }
+            ],
+            "conflicts": [],
+            "source": "registry"
+          },
+          {
+            "url": "https://hagmans.com/",
+            "source": "email_domain",
+            "decision": "unreachable",
+            "reason": "request timed out",
+            "status": 0
+          }
+        ]
+      },
+      {
+        "organisation_number": "988910880",
+        "names": [
+          "BJØRNEMYRVEIEN 29 AS"
+        ],
+        "before": "https://heimstaden.com/no",
+        "after": null,
+        "verdict": {
+          "candidate": "https://fredensborg.no/",
+          "decision": "ambiguous",
+          "confidence": 0.25,
+          "reason": "evidence suggests a match but is not sufficient to publish",
+          "signals": [
+            {
+              "signal": "city",
+              "strength": "supporting",
+              "detail": "Page mentions 'oslo'",
+              "weight": 0.15
+            },
+            {
+              "signal": "email_domain",
+              "strength": "supporting",
+              "detail": "The registered contact email is on fredensborg.no or listed on the page",
+              "weight": 0.35
+            }
+          ],
+          "conflicts": []
+        },
+        "rejected_candidates": [
+          {
+            "candidate": "https://heimstaden.com/no",
+            "decision": "rejected",
+            "confidence": 0.075,
+            "reason": "insufficient identity evidence",
+            "signals": [
+              {
+                "signal": "city",
+                "strength": "supporting",
+                "detail": "Page mentions 'oslo'",
+                "weight": 0.15
+              }
+            ],
+            "conflicts": [],
+            "source": "registry"
+          },
+          {
+            "candidate": "https://fredensborg.no/",
+            "decision": "ambiguous",
+            "confidence": 0.25,
+            "reason": "evidence suggests a match but is not sufficient to publish",
+            "signals": [
+              {
+                "signal": "city",
+                "strength": "supporting",
+                "detail": "Page mentions 'oslo'",
+                "weight": 0.15
+              },
+              {
+                "signal": "email_domain",
+                "strength": "supporting",
+                "detail": "The registered contact email is on fredensborg.no or listed on the page",
+                "weight": 0.35
+              }
+            ],
+            "conflicts": [],
+            "source": "email_domain"
+          }
+        ]
+      },
+      {
+        "organisation_number": "996340325",
+        "names": [
+          "HOTELLDRIFT OSLO SENTRUM AS",
+          "KARENSLYST ÅRGANG 2010 XLVIII AS"
+        ],
+        "before": "https://www.strawberry.no/",
+        "after": null,
+        "verdict": null,
+        "rejected_candidates": [
+          {
+            "candidate": "https://www.strawberry.no/",
+            "decision": "rejected",
+            "confidence": 0.075,
+            "reason": "insufficient identity evidence",
+            "signals": [
+              {
+                "signal": "city",
+                "strength": "supporting",
+                "detail": "Page mentions 'oslo'",
+                "weight": 0.15
+              }
+            ],
+            "conflicts": [],
+            "source": "registry"
+          },
+          {
+            "candidate": "https://www.strawberry.no/",
+            "decision": "rejected",
+            "confidence": 0.075,
+            "reason": "insufficient identity evidence",
+            "signals": [
+              {
+                "signal": "city",
+                "strength": "supporting",
+                "detail": "Page mentions 'oslo'",
+                "weight": 0.15
+              }
+            ],
+            "conflicts": [],
+            "source": "email_domain"
+          }
+        ]
+      }
+    ],
+    "changed": []
+  },
+  "interpretation": "Matched operational coverage, not labelled recall, precision, an official score, or qualification. Live source changes may contribute to differences.",
+  "inputs": {
+    "before": {
+      "path": "out/dev/v3-1000.jsonl",
+      "sha256": "2fb914634ffa1cbb3324b93efa6cfa9be33179519653647b0c360f2c85fe94d0"
+    },
+    "after": {
+      "path": "work/codex-improvement/validated1100.jsonl",
+      "sha256": "2249dce6200ecddd6ea38ede086564fae42ad772d7c6955f8bf2defd449686c1"
+    }
+  }
+}
