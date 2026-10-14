@@ -1,0 +1,11 @@
+# Reproducibility: the organisation-number manifest and the corpus are checksummed
+# over LF-joined content, so a CRLF checkout on Windows would change their hashes and
+# make a reviewer's verification fail. Pin line endings for everything textual.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gz binary
+*.zip binary
+*.pdf binary
+*.bin binary

@@ -390,6 +390,66 @@ _BOILERPLATE_WORDS = (
 )
 
 
+# Registrar parking pages and default server pages. A guessed domain that resolves is
+# very often one of these, and calling that "insufficient identity evidence" is true
+# but uninformative: the useful finding is that the domain exists and hosts nothing.
+# Strong markers name the host or parking product and are conclusive on their own.
+_PARKED_STRONG = (
+    "parkert hos",
+    "domenet er parkert",
+    "dette domenet er til salgs",
+    "domain is parked",
+    "this domain is parked",
+    "domain for sale",
+    "this domain is for sale",
+    "buy this domain",
+    "webhosting made simple",
+    "welcome to nginx",
+    "apache2 ubuntu default page",
+    "apache2 debian default page",
+    "default web site page",
+    "iis windows server",
+    "future home of something quite cool",
+    "domeneshop",
+    "sedoparking",
+    "godaddy standard parking",
+)
+
+# Weak markers are things a live site may legitimately say, so they only count when
+# the page has almost no other content.
+_PARKED_WEAK = (
+    "under construction",
+    "under konstruksjon",
+    "under oppbygging",
+    "coming soon",
+    "kommer snart",
+    "siden er under arbeid",
+    "website is under construction",
+    "no website configured",
+    "site not published",
+)
+
+_PARKED_WEAK_MAX_CHARS = 600
+
+
+def looks_parked(title: str, text: str) -> str | None:
+    """The marker proving this page is a parking or placeholder page, else None.
+
+    Returning the matched marker rather than a bare boolean keeps the rejection
+    auditable: a reviewer can see exactly which phrase decided it.
+    """
+    haystack = f"{clean_text(title)} {clean_text(text)}".casefold()
+    for marker in _PARKED_STRONG:
+        if marker in haystack:
+            return marker
+    body = clean_text(text)
+    if len(body) <= _PARKED_WEAK_MAX_CHARS:
+        for marker in _PARKED_WEAK:
+            if marker in haystack:
+                return marker
+    return None
+
+
 def clean_text(value: str) -> str:
     """Strip icon-font artefacts and collapse whitespace in scraped text."""
     return re.sub(r"\s+", " ", _PRIVATE_USE_RE.sub(" ", value or "")).strip()

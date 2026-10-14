@@ -230,6 +230,8 @@ class CompanyPipeline:
                 "rejected": list(result.rejected),
                 "injection_reports": list(result.injection_reports),
                 "notes": list(result.notes),
+                "discovery": result.discovery.to_dict() if result.discovery else None,
+                "access_refused": list(result.access_refused),
             },
         )
 
@@ -312,8 +314,13 @@ class CompanyPipeline:
                 result.identity["website_verdict"] = website.detail.get("verdict")
                 result.identity["verified_url"] = website.detail.get("verified_url")
                 result.identity["rejected_candidates"] = website.detail.get("rejected", [])
+                result.identity["discovery"] = website.detail.get("discovery")
                 if website.detail.get("injection_reports"):
                     result.operations["injection_reports"] = website.detail["injection_reports"]
+                discovery = website.detail.get("discovery") or {}
+                result.operations["dns_lookups"] = discovery.get("dns_lookups", 0)
+                result.operations["candidates_considered"] = discovery.get("considered", 0)
+                result.operations["candidates_fetched"] = len(discovery.get("candidates", []))
         else:
             result.identity = {"organisation_number": org, "names": [], "resolved": False}
 

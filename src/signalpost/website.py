@@ -21,18 +21,29 @@ from datetime import date
 from typing import Any, Iterable
 
 from .budget import BudgetExceeded
+from .discovery import DiscoveryResult, discover
 from .extract import fields as F
 from .extract import html as H
 from .fetch import Fetcher, Response
-from .identity import CompanyIdentity, IdentityResolver, IdentityVerdict, normalise_name
+from .identity import CompanyIdentity, IdentityResolver, IdentityVerdict
 from .models import Claim, Evidence, Locator, Snapshot, claim_key, stable_id
-from .net import canonical_url, registrable_domain, validate_url
+from .net import canonical_url, registrable_domain
 
 # Crawl order: the pages most likely to carry scored facts come first, so a company
 # that runs out of budget still gets the highest-value pages.
 CRAWL_PRIORITY = ("contact", "about", "careers", "news", "team", "services")
 
 DEFAULT_MAX_PAGES = 5
+DEFAULT_MAX_CANDIDATES = 4
+
+# Statuses that mean "we were refused", not "there is nothing here". A registry-listed
+# site answering with one of these is evidence the site exists and that we could not
+# read it, which is the `blocked` availability state rather than `not_available`.
+ACCESS_REFUSED_STATUSES = frozenset({401, 403, 405, 429, 451, 503})
+
+
+def _is_access_refusal(status: int | None) -> bool:
+    return status in ACCESS_REFUSED_STATUSES
 
 
 @dataclass(slots=True)
@@ -61,46 +72,8 @@ class WebsiteResult:
     rejected: list[dict[str, Any]] = field(default_factory=list)
     injection_reports: list[dict[str, Any]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
-
-
-def candidate_sites(identity: CompanyIdentity) -> list[tuple[str, bool]]:
-    """Candidate URLs as (url, came_from_registry), best first.
-
-    Inference is deliberately narrow: only a `.no` domain built from the company's own
-    distinctive name tokens. Guessing widely would produce confident wrong answers,
-    which cost far more than a missing website.
-    """
-    candidates: list[tuple[str, bool]] = []
-    seen: set[str] = set()
-
-    def add(url: str, from_registry: bool) -> None:
-        if not url:
-            return
-        normalised = url.strip()
-        if "://" not in normalised:
-            normalised = f"https://{normalised}"
-        verdict = validate_url(normalised, resolve=False)
-        if not verdict.allowed:
-            return
-        key = registrable_domain(normalised)
-        if not key or key in seen:
-            return
-        seen.add(key)
-        candidates.append((normalised, from_registry))
-
-    if identity.registry_website:
-        add(identity.registry_website, True)
-
-    for address in identity.emails:
-        host = address.split("@")[-1]
-        if host and host not in {"gmail.com", "hotmail.com", "outlook.com", "online.no", "yahoo.com"}:
-            add(f"https://{host}", False)
-
-    stem = "".join(part for part in normalise_name(identity.legal_name).split() if part)
-    if 4 <= len(stem) <= 24:
-        add(f"https://www.{stem}.no", False)
-
-    return candidates[:3]
+    discovery: DiscoveryResult | None = None
+    access_refused: list[dict[str, Any]] = field(default_factory=list)
 
 
 class WebsiteResearcher:
@@ -111,10 +84,12 @@ class WebsiteResearcher:
         fetcher: Fetcher,
         *,
         max_pages: int = DEFAULT_MAX_PAGES,
+        max_candidates: int = DEFAULT_MAX_CANDIDATES,
         today: date | None = None,
     ) -> None:
         self.fetcher = fetcher
         self.max_pages = max_pages
+        self.max_candidates = max_candidates
         self.today = today
 
     # -- entry point ----------------------------------------------------------
@@ -161,7 +136,10 @@ class WebsiteResearcher:
         resolver = IdentityResolver(identity)
         best: tuple[PageVisit, IdentityVerdict] | None = None
 
-        for url, from_registry in candidate_sites(identity):
+        # Candidates that cannot resolve are dropped here without spending a request.
+        result.discovery = discover(identity, max_candidates=self.max_candidates)
+        for candidate in result.discovery.candidates:
+            url, from_registry = candidate.url, candidate.from_registry
             try:
                 response = self.fetcher.get(
                     url, purpose="website_landing", source_class="company_owned"
@@ -171,27 +149,47 @@ class WebsiteResearcher:
                 break
 
             if not response.ok or not response.text:
+                record = {
+                    "url": canonical_url(url),
+                    "source": candidate.source,
+                    "decision": "unreachable",
+                    "reason": response.error or f"HTTP {response.status}",
+                    "status": response.status,
+                }
+                result.rejected.append(record)
+                if from_registry and _is_access_refusal(response.status):
+                    result.access_refused.append(record)
+                continue
+
+            visit = self._page(response, "landing")
+            title = H.page_title(visit.soup).value if H.page_title(visit.soup) else ""
+
+            # A resolving guessed domain is very often a registrar parking page. Saying
+            # so is a better research result than "insufficient identity evidence",
+            # and there is nothing on such a page worth putting to the identity gate.
+            parked = F.looks_parked(str(title), visit.text)
+            if parked:
                 result.rejected.append(
                     {
-                        "url": canonical_url(url),
-                        "decision": "unreachable",
-                        "reason": response.error or f"HTTP {response.status}",
+                        "url": canonical_url(response.final_url),
+                        "source": candidate.source,
+                        "decision": "rejected",
+                        "reason": f"domain resolves to a parking or placeholder page ({parked!r})",
                     }
                 )
                 continue
 
-            visit = self._page(response, "landing")
             verdict = resolver.assess_website(
                 response.final_url,
                 page_text=visit.text,
-                page_title=(H.page_title(visit.soup).value if H.page_title(visit.soup) else ""),
+                page_title=str(title),
                 emails=[str(item.value) for item in F.extract_emails(visit.soup, visit.text)],
                 phones=[str(item.value) for item in F.extract_phones(visit.soup, visit.text)],
                 from_registry=from_registry,
             )
             if verdict.publishable:
                 return visit, verdict
-            result.rejected.append(verdict.to_dict())
+            result.rejected.append({**verdict.to_dict(), "source": candidate.source})
             if best is None and verdict.decision == "ambiguous":
                 best = (visit, verdict)
 
@@ -552,10 +550,27 @@ class WebsiteResearcher:
         Every external family still gets a claim, because a stated `not_available` with
         a reason is a real research result and an omission is not.
         """
-        if result.verdict is not None and result.verdict.decision == "ambiguous":
+        if result.access_refused:
+            # The registry vouches for a site we were refused access to. Reporting
+            # `not_available` would assert we looked and found nothing published;
+            # `blocked` says what actually happened and keeps the distinction the
+            # evaluator scores.
+            refusal = result.access_refused[0]
+            state = "blocked"
+            reason = (
+                f"Registry-listed website {refusal['url']} refused automated access "
+                f"({refusal['reason']})"
+            )
+        elif result.verdict is not None and result.verdict.decision == "ambiguous":
             state, reason = "ambiguous", result.verdict.reason
         elif result.rejected:
             state, reason = "not_available", "Candidate websites failed the identity gate"
+        elif result.discovery is not None and not result.discovery.candidates:
+            state, reason = (
+                "not_available",
+                "No candidate domain for this company resolved in DNS"
+                f" ({result.discovery.dns_lookups} lookups)",
+            )
         else:
             state, reason = "not_available", "No website candidate available for this company"
 

@@ -78,21 +78,42 @@ GENERIC_TOKENS = frozenset(
     }
 )
 
+LEADING_LEGAL_FORMS = frozenset({"as", "asa"})
+AS_SLASH_RE = re.compile(r"(?<![\w])a\s*/\s*s(?![\w])")
+
 DECISIVE = "decisive"
 SUPPORTING = "supporting"
 
 ORG_NUMBER_RE = re.compile(r"\b(\d{3})[\s. -]?(\d{3})[\s. -]?(\d{3})\b")
 
 
+# Letters NFKD does not decompose, so they need an explicit mapping. "Å" decomposes
+# to A + combining ring and loses it for free; "Ø" and "Æ" are indivisible letters and
+# do not. The registry publishes names in upper case while websites write them in
+# mixed case, so this has to run *after* casefolding or "SCHRØDER" and "Schrøder"
+# normalise differently and the identity gate rejects a company's real website.
+TRANSLITERATE = str.maketrans(
+    {"ø": "o", "æ": "ae", "å": "a", "ð": "d", "þ": "th", "đ": "d", "ł": "l"}
+)
+
+
 def normalise_name(value: str) -> str:
-    """Casefold, strip accents, punctuation and legal-form suffixes."""
-    text = unicodedata.normalize("NFKD", str(value or ""))
+    """Casefold, transliterate, strip accents, punctuation and legal-form suffixes."""
+    text = str(value or "").casefold().translate(TRANSLITERATE)
+    text = unicodedata.normalize("NFKD", text)
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    text = text.replace("ø", "o").replace("æ", "ae").replace("å", "a")
-    text = re.sub(r"[^\w\s]", " ", text.casefold())
+    # "A/S" is the older spelling of "AS" and would otherwise split into two stray
+    # single letters that survive suffix stripping.
+    text = AS_SLASH_RE.sub(" as ", text)
+    text = re.sub(r"[^\w\s]", " ", text)
     tokens = [token for token in text.split() if token]
     while tokens and tokens[-1] in LEGAL_SUFFIXES:
         tokens.pop()
+    # Norwegian names also carry the form up front ("AS TROMSØ AUTOMOBILCOMPANI").
+    # Only "as"/"asa" are stripped here, and only one: "da", "ba" and "sa" are real
+    # words that begin real company names, and dropping them would change identity.
+    if len(tokens) > 1 and tokens[0] in LEADING_LEGAL_FORMS:
+        tokens.pop(0)
     return " ".join(tokens)
 
 
