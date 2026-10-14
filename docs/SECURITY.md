@@ -154,15 +154,24 @@ refuses us, the refusal is recorded as a finding.
   snapshot directory by that path.
 
 The submitted run path uses **no API keys at all** — see
-[`MODELS_AND_APIS.md`](MODELS_AND_APIS.md). There is nothing to leak because there is
+[`MODELS_AND_APIS.md`](../MODELS_AND_APIS.md). There is nothing to leak because there is
 nothing configured.
 
 ## What is excluded from Git and from the submission ZIP
 
 Raw snapshots, local run output, browser state, downloaded bulk archives and the local
-`.fetch/` working directory. The published evidence set under `docs/evidence/` is curated
-and reviewed. See [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md) for the pre-delivery
-secret scan over the working tree, the Git history and the archive contents.
+`.fetch/` working directory are excluded from Git. The submission ZIP is built by
+`scripts/signalpost/package_submission.py`: its `source/` is a `git archive` of the tested
+commit (so `.git`, `.env`, virtual environments, caches and untracked files cannot enter it),
+and its `evidence/snapshots/` holds only official-register response bodies; company-website
+bodies are referenced by SHA-256 and not redistributed. After building, the packager extracts
+the ZIP into a fresh directory (refusing traversal and symlink members) and scans every text
+payload file for credential patterns (Anthropic, OpenAI, GitHub, AWS, Google and Slack keys,
+private-key blocks), for the builder's own checkout and home-directory paths, and for forbidden
+names (`.env`, `.git`, `.venv`, `node_modules`, `__pycache__`); `--verify-only` repeats the same
+checks on an existing ZIP. These are pattern scans: they catch the listed key formats, not every
+possible secret. See [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md) for the recorded result.
+No curated evidence set exists under `docs/`.
 
 ## Not defended
 

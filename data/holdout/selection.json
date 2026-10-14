@@ -1,0 +1,82 @@
+{
+  "schema_version": "signalpost.selection/1",
+  "generated_at": "2026-09-14T11:50:36Z",
+  "algorithm": "stratified-proportional-sha256-v1",
+  "seed": "signalpost-holdout-1",
+  "universe": {
+    "path": "data/downloads/signalpost-universe.jsonl.gz",
+    "sha256": "1c89710e5b01f8617e86d09fbdff4a52f2f8dbbba297e74f7164b5984f5a0384",
+    "eligible_rows": 410160
+  },
+  "selected": 100,
+  "manifest_sha256": "05966d853af0fd080f05f0f1920721dbeb70c673572160d16259523752e18439",
+  "strata": {
+    "00": 11,
+    "01": 1,
+    "03": 1,
+    "10": 1,
+    "33": 1,
+    "41": 3,
+    "43": 5,
+    "46": 4,
+    "47": 6,
+    "49": 1,
+    "50": 1,
+    "52": 1,
+    "55": 1,
+    "56": 2,
+    "59": 1,
+    "62": 4,
+    "64": 4,
+    "68": 22,
+    "69": 1,
+    "70": 4,
+    "71": 4,
+    "73": 1,
+    "74": 2,
+    "77": 1,
+    "78": 1,
+    "79": 1,
+    "81": 1,
+    "85": 2,
+    "86": 2,
+    "90": 1,
+    "93": 1,
+    "94": 1,
+    "95": 1,
+    "96": 1,
+    "97": 5
+  },
+  "composition": {
+    "legal_forms": {
+      "AS": 90,
+      "ESEK": 3,
+      "BRL": 2,
+      "BBL": 1,
+      "ANS": 1,
+      "DA": 1,
+      "FLI": 1,
+      "STI": 1
+    },
+    "distinct_sectors": 35,
+    "distinct_municipalities": 62,
+    "top_municipalities": {
+      "OSLO": 14,
+      "BERGEN": 5,
+      "TRONDHEIM": 5,
+      "STAVANGER": 3,
+      "ASKER": 3,
+      "RINGSAKER": 3,
+      "TØNSBERG": 2,
+      "KONGSBERG": 2
+    },
+    "with_registry_website": 9,
+    "with_registry_website_pct": 9.0,
+    "with_employee_count": 14
+  },
+  "excluded": {
+    "manifest": "data/corpus/organisation-numbers.txt",
+    "count": 1000,
+    "reason": "disjoint from the submission corpus; a locally generated holdout, not the organiser hidden batch"
+  }
+}

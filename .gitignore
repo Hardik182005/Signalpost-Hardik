@@ -26,3 +26,9 @@ dist/
 # Local fetch working directory: raw snapshots, smoke-run output, checksums.
 # Curated evidence is published separately under docs/evidence.
 .fetch/
+
+# Local investigation and before/after evaluation artifacts
+/work/
+
+# macOS Finder metadata
+.DS_Store

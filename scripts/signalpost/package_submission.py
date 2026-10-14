@@ -255,6 +255,32 @@ def write_email(directory: Path, stem: str, subject: str, body: str, personal: d
     (directory / f"{stem}.eml").write_bytes(bytes(message))
 
 
+MARKDOWN_LINK = re.compile(r"\]\((?![a-z][a-z0-9+.-]*:|#)([^)\s#]+)(#[^)\s]*)?\)")
+
+
+def relink(text: str, repo_path: str, packaged_path: str, locations: dict[str, str], source: Path) -> str:
+    """Point a copied document's relative links at where their targets sit in the package.
+
+    A target that was itself copied (docs/, top level) links to that copy; anything else links
+    into source/. A link that did not resolve in the repository is left exactly as written.
+    """
+    import posixpath
+
+    def replace(match: re.Match) -> str:
+        target, anchor = match.group(1), match.group(2) or ""
+        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(repo_path), target))
+        if resolved in locations:
+            destination = locations[resolved]
+        elif (source / resolved).exists():
+            destination = f"source/{resolved}"
+        else:
+            return match.group(0)
+        relative = posixpath.relpath(destination, posixpath.dirname(packaged_path) or ".")
+        return f"]({relative}{anchor})"
+
+    return MARKDOWN_LINK.sub(replace, text)
+
+
 def build(config: dict, workdir: Path) -> tuple[Path, dict]:
     commit = git("rev-parse", config.get("commit", "HEAD"))
     short = commit[:7]
@@ -354,14 +380,23 @@ def build(config: dict, workdir: Path) -> tuple[Path, dict]:
     (payload / "reports").mkdir()
     for name, relative in config["reports"].items():
         shutil.copyfile(ROOT / relative, payload / "reports" / name)
+    # Documents come from the exported commit, never the working tree, so what a reviewer
+    # reads is what was tested. Their relative links are rewritten for the packaged layout.
     (payload / "docs").mkdir()
+    locations: dict[str, str] = {}
     for relative in config["docs"]:
-        target = payload / "docs" / Path(relative).name
-        if target.exists():
-            raise SystemExit(f"two documents share the name {target.name}")
-        shutil.copyfile(ROOT / relative, target)
+        name = PurePosixPath(relative).name
+        if f"docs/{name}" in locations.values():
+            raise SystemExit(f"two documents share the name {name}")
+        locations[relative] = f"docs/{name}"
     for relative in config["top_level"]:
-        shutil.copyfile(ROOT / relative, payload / Path(relative).name)
+        locations[relative] = PurePosixPath(relative).name
+    for relative, packaged in locations.items():
+        exported = payload / "source" / relative
+        if not exported.is_file():
+            raise SystemExit(f"{relative} is not in commit {short}; commit it before packaging")
+        text = relink(exported.read_text(encoding="utf-8"), relative, packaged, locations, payload / "source")
+        (payload / packaged).write_text(text, encoding="utf-8", newline="\n")
 
     # -- manifest ----------------------------------------------------------------
     orgs = [l.strip() for l in (ROOT / data["organisation_numbers"]).read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -539,6 +574,17 @@ def verify(zip_path: Path, config: dict) -> dict:
                         hits.append(f"{name} in {path.relative_to(payload).as_posix()}")
         forbidden = [p.relative_to(payload).as_posix() for p in payload.rglob("*")
                      if p.name in {".env", ".git", ".venv", "node_modules", "__pycache__"}]
+        # The builder's own checkout and home directory must not appear in any payload text.
+        local_markers = {str(ROOT), ROOT.as_posix(), str(Path.home()), Path.home().as_posix()}
+        local_hits = []
+        for path in payload.rglob("*"):
+            if path.is_file() and path.suffix in TEXT_SUFFIXES:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+                escaped = text.replace("\\\\", "\\")
+                if any(marker in text or marker in escaped for marker in local_markers):
+                    local_hits.append(path.relative_to(payload).as_posix())
+        results["checks"]["no_builder_local_paths_in_text"] = not local_hits
+        results["problems"].extend(f"builder-local path in {name}" for name in local_hits[:20])
         results["checks"]["no_secret_patterns"] = not hits
         results["checks"]["no_forbidden_paths"] = not forbidden
         results["problems"].extend(hits + [f"forbidden path: {f}" for f in forbidden])

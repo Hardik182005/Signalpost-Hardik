@@ -22,6 +22,7 @@ def load(name: str):
 package = load("package_submission")
 review = load("build_review_queue")
 evaluation = load("write_evaluation_report")
+batch = load("run_batch")
 
 
 def envelope(**overrides) -> dict:
@@ -151,3 +152,52 @@ class TestEvaluationReport:
                      "disk_mib_total": 12.0}
         text = evaluation.render(self.config(tmp_path, resources))
         assert "| Peak memory | 300.5 MiB (job object) | 16 GiB |" in text
+
+
+class TestRunBatch:
+    def test_starter_input_forms_are_accepted_in_order(self, tmp_path):
+        jsonl = tmp_path / "batch.jsonl"
+        jsonl.write_text('{"organisation_number": "998 645 417"}\n\n{"organisation_number": 979498047}\n', encoding="utf-8")
+        listing = tmp_path / "batch.json"
+        listing.write_text('{"organisation_numbers": ["979498047", "998645417"]}', encoding="utf-8")
+        text = tmp_path / "batch.txt"
+        text.write_text("# header\n998645417\n", encoding="utf-8")
+        assert batch.read_organisations(jsonl) == ["998645417", "979498047"]
+        assert batch.read_organisations(listing) == ["979498047", "998645417"]
+        assert batch.read_organisations(text) == ["998645417"]
+
+    @pytest.mark.parametrize("body", ['{"organisation_number": "12345"}\n', '{"name": "no number"}\n',
+                                      '{"organisation_number": "998645417"}\n{"organisation_number": "998645417"}\n'])
+    def test_malformed_or_duplicate_rows_refuse_the_batch(self, tmp_path, body):
+        path = tmp_path / "batch.jsonl"
+        path.write_text(body, encoding="utf-8")
+        with pytest.raises(batch.BatchError):
+            batch.read_organisations(path)
+
+    def test_count_mismatch_is_refused_before_any_run(self, tmp_path, capsys):
+        path = tmp_path / "batch.jsonl"
+        path.write_text('{"organisation_number": "998645417"}\n', encoding="utf-8")
+        code = batch.main(["--organisations", str(path), "--output", str(tmp_path / "out.jsonl"), "--expected-count", "100"])
+        assert code == 2 and "expected 100" in capsys.readouterr().err
+        assert not (tmp_path / "out-inputs.txt").exists()
+
+    def test_limit_cannot_silently_truncate_the_batch(self, tmp_path):
+        path = tmp_path / "batch.jsonl"
+        path.write_text('{"organisation_number": "998645417"}\n', encoding="utf-8")
+        assert batch.main(["--organisations", str(path), "--output", str(tmp_path / "o.jsonl"), "--limit", "1"]) == 2
+
+
+class TestRelink:
+    def test_links_follow_documents_to_their_packaged_locations(self, tmp_path):
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "runner.py").write_text("", encoding="utf-8")
+        locations = {"EVAL.md": "docs/EVAL.md", "docs/SECURITY.md": "docs/SECURITY.md",
+                     "SUBMISSION_CHECKLIST.md": "SUBMISSION_CHECKLIST.md"}
+        text = "[a](../EVAL.md#runs) [b](../SUBMISSION_CHECKLIST.md) [c](../src/runner.py) [d](https://x.no) [e](missing.md)"
+        out = package.relink(text, "docs/SECURITY.md", "docs/SECURITY.md", locations, tmp_path)
+        assert out == "[a](EVAL.md#runs) [b](../SUBMISSION_CHECKLIST.md) [c](../source/src/runner.py) [d](https://x.no) [e](missing.md)"
+
+    def test_top_level_document_links_into_docs(self, tmp_path):
+        locations = {"docs/SECURITY.md": "docs/SECURITY.md", "SUBMISSION_README.md": "SUBMISSION_README.md"}
+        out = package.relink("[s](docs/SECURITY.md)", "SUBMISSION_README.md", "SUBMISSION_README.md", locations, tmp_path)
+        assert out == "[s](docs/SECURITY.md)"

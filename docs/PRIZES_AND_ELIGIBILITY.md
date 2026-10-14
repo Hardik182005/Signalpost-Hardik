@@ -106,7 +106,7 @@ which is versioned, cumulative and not available to entrants. Nothing in this re
 estimates a score, and no local command emits a qualification verdict. What the repository
 does report is measured, reproducible facts about its own runs — envelope counts,
 availability mix, request counts, wall-clock time, spend — in
-[`BUILD_STATUS.md`](BUILD_STATUS.md) and [`EVAL.md`](EVAL.md).
+[`BUILD_STATUS.md`](BUILD_STATUS.md) and [`EVAL.md`](../EVAL.md).
 
 Two limits are worth stating plainly, because they bound what any local measurement can
 mean:
@@ -116,7 +116,7 @@ mean:
    how many facts we found; we cannot measure what fraction of the pool that is.
 2. **Precision can be self-audited but not self-certified.** We can show that the identity
    gate refused every candidate that lacked sufficient evidence, and
-   [`LIMITATIONS.md`](LIMITATIONS.md) records where it is most likely to be wrong.
+   [`LIMITATIONS.md`](../LIMITATIONS.md) records where it is most likely to be wrong.
 
 ## Eligibility items an entrant controls
 
@@ -127,9 +127,9 @@ mean:
 | Repository URL and exact commit hash | recorded in the submission email draft at freeze time |
 | One run command | `uv run main.py -i … -o …` — see [`README.md`](../README.md) |
 | Pinned dependencies | `uv.lock`, committed |
-| Models, APIs and licences | [`MODELS_AND_APIS.md`](MODELS_AND_APIS.md) |
-| Expected cost per 100-company run | [`COSTS.md`](COSTS.md), measured not estimated |
-| Source rights | [`SOURCE_RIGHTS.md`](SOURCE_RIGHTS.md) |
+| Models, APIs and licences | [`MODELS_AND_APIS.md`](../MODELS_AND_APIS.md) |
+| Expected cost per 100-company run | [`COSTS.md`](../COSTS.md), measured not estimated |
+| Source rights | [`SOURCE_RIGHTS.md`](../SOURCE_RIGHTS.md) |
 | Secrets and URL policy | [`SECURITY.md`](SECURITY.md) |
 | Contact for results | in the submission email draft |
 
