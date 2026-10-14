@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Changes &middot; {{ row.display_name if row else envelope.get('organisation_number') }}{% endblock %}
+
+{% macro side(panel, title) -%}
+<div>
+  <h4>{{ title }}</h4>
+  <div class="value">
+    {% if panel.display %}
+      {% if panel.link %}{{ ui.ext(panel.link, panel.display) }}{% else %}{{ panel.display | truncate_text(400) }}{% endif %}
+    {% elif panel.availability %}
+      <span class="unknown">no value</span>
+    {% else %}
+      <span class="unknown">not present</span>
+    {% endif %}
+  </div>
+  {% if panel.availability %}<p class="meta">Availability: {{ ui.state_badge(panel.availability) }}</p>{% endif %}
+  {% if panel.evidence %}
+  {{ ui.evidence_list(panel.evidence) }}
+  {% elif panel.evidence_note %}
+  <p class="meta">{{ panel.evidence_note }}</p>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{% block content %}
+<p class="meta"><a href="/changes">&larr; All changes</a> &middot; <a href="/companies/{{ envelope.get('organisation_number') }}">Company profile</a></p>
+
+<h1>{{ row.display_name if row else envelope.get('organisation_number') }}</h1>
+<p class="lede"><span class="mono">{{ envelope.get('organisation_number') }}</span> &middot; version history recorded by the pipeline, not reconstructed by this interface.</p>
+
+<div class="panel">
+  <dl class="kv">
+    <dt>Compared against</dt>
+    <dd>{% if refresh.get('compared_against') %}<span class="mono">{{ refresh.get('compared_against') }}</span>{% else %}<span class="unknown">no baseline run</span>{% endif %}</dd>
+    <dt>Baseline envelopes</dt>
+    <dd>{% if baseline %}<span class="mono">{{ baseline.label }}</span> &middot; {{ baseline.count }} companies loaded, so both sides of each diff can open their evidence{% else %}<span class="unknown">not located</span>{% endif %}</dd>
+    <dt>Changes recorded</dt><dd>{{ refresh.get('total_changes', 0) }} total, {{ refresh.get('material_changes', 0) }} material</dd>
+    <dt>Idempotent re-run</dt><dd>{% if refresh.get('idempotent') is not none %}{{ 'Yes' if refresh.get('idempotent') else 'No' }}{% else %}<span class="unknown">not stated</span>{% endif %}</dd>
+    {% if refresh.get('note') %}<dt>Note</dt><dd>{{ refresh.get('note') }}</dd>{% endif %}
+    {% if refresh.get('material_fields') %}<dt>Material fields</dt><dd>{% for name in refresh.get('material_fields') %}<span class="mono">{{ name }}</span>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}
+  </dl>
+</div>
+
+{% if not views %}
+<div class="notice info">
+  <h2 style="margin-top:0">No change events for this company</h2>
+  {% if refresh.get('compared_against') %}
+  <p>This company was compared against run <span class="mono">{{ refresh.get('compared_against') }}</span> and every claim matched the earlier observation.</p>
+  {% else %}
+  <p>{{ refresh.get('note') or 'This run had no earlier observation of this company to compare against.' }}</p>
+  {% endif %}
+</div>
+{% else %}
+<h2>{{ views | length }} change event{{ '' if views | length == 1 else 's' }}</h2>
+{% for view in views %}
+<div class="panel">
+  <h3 style="margin-top:0">{{ view.label }}
+    <span class="badge {{ 'material' if view.material else '' }}">{{ view.change_type_label }}</span>
+    {% if view.material %}<span class="badge material">material</span>{% endif %}
+  </h3>
+  <p class="meta">
+    <span class="mono">{{ view.claim_key }}</span>
+    {% if view.family %} &middot; {{ family_labels.get(view.family, view.family) }}{% endif %}
+    {% if view.detected_at %} &middot; detected {{ view.detected_at | timestamp }}{% endif %}
+  </p>
+  {% if view.explanation %}<p>{{ view.explanation }}</p>{% endif %}
+  <div class="diff">
+    {{ side(view.before, 'Before') }}
+    {{ side(view.after, 'After') }}
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

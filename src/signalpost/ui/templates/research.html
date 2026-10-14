@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Research{% endblock %}
+
+{% block content %}
+<h1>Research a company</h1>
+
+{% if research_enabled %}
+<div class="notice warn">
+  <p><strong>This server can start a real pipeline run.</strong> It was started with <span class="mono">--enable-research</span>, so submitting a company here fetches live sources{% if config.research_offline %} &mdash; except that <span class="mono">--research-offline</span> is also set, so the pipeline runs without making outbound requests{% endif %}.</p>
+  <p class="meta">Output is written only to <span class="mono">{{ config.scratch_dir }}</span>. The loaded run file is never modified. One job runs at a time, with a bounded request budget.</p>
+</div>
+{% else %}
+<div class="notice info">
+  <p><strong>Research is disabled on this server.</strong> This interface is read-only over the run output in <span class="mono">{{ config.input_path }}</span>: it cannot start a crawl, and nothing here can cause an outbound request.</p>
+  <p class="meta">An operator who wants the action enabled starts the server with <span class="mono">--enable-research</span>. The form below still validates input and tells you whether a company is already covered by the loaded run.</p>
+</div>
+{% endif %}
+
+{% if result and not result.ok %}
+<div class="notice bad">
+  <p>{{ result.message }}</p>
+  {% if result.get('in_dataset') %}<p><a href="/companies/{{ result.get('organisation_number') }}">That company is already in the loaded run &mdash; open its profile</a>.</p>{% endif %}
+</div>
+{% endif %}
+
+<form class="panel" method="post" action="/research">
+  <h2 style="margin-top:0">Single company</h2>
+  <div class="filters">
+    <div class="field" style="grid-column: span 2">
+      <label for="organisation_number">Norwegian organisation number</label>
+      <input type="text" id="organisation_number" name="organisation_number" maxlength="14" inputmode="numeric" placeholder="989925970" required>
+    </div>
+  </div>
+  <div class="actions">
+    <button type="submit">{{ 'Run the pipeline' if research_enabled else 'Check this number' }}</button>
+    <span class="meta">Nine digits. The control digit is checked (MOD-11) on the server before anything else happens.</span>
+  </div>
+</form>
+
+<form class="panel" method="post" action="/batch" enctype="multipart/form-data">
+  <h2 style="margin-top:0">Batch upload</h2>
+  <div class="filters">
+    <div class="field" style="grid-column: span 2">
+      <label for="batch">JSONL or plain-text file, one organisation number per line</label>
+      <input type="file" id="batch" name="batch" accept=".jsonl,.txt,.csv,text/plain,application/json" required>
+    </div>
+  </div>
+  <div class="actions">
+    <button type="submit">Validate{{ ' and run' if research_enabled else '' }}</button>
+    <span class="meta">At most {{ max_upload_bytes | filesize }} and {{ max_upload_records }} records. Every line is validated and reported before any work starts.</span>
+  </div>
+</form>
+
+{% if batch %}
+<h2>Upload: {{ filename }}</h2>
+<dl class="stat-grid">
+  <div class="stat"><dt>Accepted</dt><dd>{{ batch.accepted | length }}</dd></div>
+  <div class="stat"><dt>Rejected</dt><dd>{{ batch.rejected | length }}</dd></div>
+  <div class="stat"><dt>Duplicates dropped</dt><dd>{{ batch.duplicates | length }}</dd></div>
+  <div class="stat"><dt>Non-empty lines</dt><dd>{{ batch.total_lines }}</dd></div>
+  <div class="stat"><dt>Size</dt><dd>{{ batch.byte_size | filesize }}</dd></div>
+</dl>
+
+{% if batch.truncated %}
+<div class="notice warn"><p>The file was cut off at {{ max_upload_records }} records. Only the first {{ batch.accepted | length }} accepted numbers were kept.</p></div>
+{% endif %}
+
+{% if batch.rejected %}
+<div class="panel table-scroll">
+  <h3 style="margin-top:0">Rejected lines</h3>
+  <table>
+    <thead><tr><th scope="col" class="num">Line</th><th scope="col">Value</th><th scope="col">Reason</th></tr></thead>
+    <tbody>
+      {% for item in batch.rejected %}
+      <tr><td class="num">{{ item.line }}</td><td class="mono">{{ item.value }}</td><td>{{ item.reason }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if coverage %}
+<div class="panel table-scroll">
+  <h3 style="margin-top:0">Accepted numbers, checked against the loaded run</h3>
+  <table>
+    <thead><tr><th scope="col">Org. number</th><th scope="col">In this run</th><th scope="col">Company</th></tr></thead>
+    <tbody>
+      {% for item in coverage %}
+      <tr>
+        <td class="mono">{{ item.organisation_number }}</td>
+        <td>{% if item.row %}<span class="badge available">already researched</span>{% else %}<span class="badge">not in this run</span>{% endif %}</td>
+        <td>{% if item.row %}<a href="/companies/{{ item.organisation_number }}">{{ item.row.display_name }}</a>{% else %}<span class="unknown">&mdash;</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
+{% if jobs %}
+<h2>Jobs started in this server process</h2>
+<div class="panel table-scroll">
+  <table>
+    <thead><tr><th scope="col">Job</th><th scope="col">State</th><th scope="col" class="num">Companies</th><th scope="col" class="num">Envelopes written</th></tr></thead>
+    <tbody>
+      {% for job in jobs %}
+      <tr>
+        <td><a href="/jobs/{{ job.id }}">{{ job.id }}</a></td>
+        <td><span class="badge {{ 'available' if job.state == 'completed' else ('failed' if job.state == 'failed' else 'partial') }}">{{ job.state }}</span></td>
+        <td class="num">{{ job.total }}</td>
+        <td class="num">{{ job.completed }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

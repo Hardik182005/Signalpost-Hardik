@@ -1,0 +1,153 @@
+{#
+  Shared rendering pieces. Two of these carry rules that must not be re-implemented
+  ad hoc in page templates:
+
+  * ``ext`` is the only way an external URL becomes a link. It routes every value
+    through the ``safe_url`` filter, so a non-http(s) or malformed value is rendered
+    as escaped text with a stated reason instead of an anchor.
+  * ``evidence_list`` is the disclosure every material fact opens: evidence locator,
+    source URL, retrieval time and snapshot hash, joined to the fetch that produced
+    them. A fact whose evidence ids do not resolve says so.
+#}
+
+{% macro state_badge(state) -%}
+<span class="badge {{ state }}" title="{{ availability_help.get(state, '') }}">{{ availability_labels.get(state, state) }}</span>
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+<span class="badge {{ status }}">{{ terminal_labels.get(status, status) }}</span>
+{%- endmacro %}
+
+{% macro ext(url, text=none) -%}
+{% set href = url | safe_url %}
+{%- if href -%}
+<a href="{{ href }}" target="_blank" rel="noopener noreferrer">{{ text if text else href }}</a>
+{%- elif url -%}
+<span class="mono">{{ text if text else url }}</span> <span class="meta">(not an http(s) link &mdash; shown as text)</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro evidence_card(record) -%}
+<div class="evidence-card">
+  <dl>
+    <dt>Source</dt><dd>{{ ext(record.source_url) }}</dd>
+    <dt>Source class</dt><dd>{{ record.source_class }}</dd>
+    <dt>Retrieved</dt><dd>{{ record.retrieved_at | timestamp }}</dd>
+    <dt>Locator</dt><dd><span class="mono">{{ record.locator_kind or 'not stated' }}</span>{% if record.locator_value %} <span class="mono">{{ record.locator_value }}</span>{% endif %}</dd>
+    <dt>Snapshot hash</dt><dd><span class="mono" title="{{ record.content_sha256 or '' }}">{{ record.content_sha256 | shorthash if record.content_sha256 else 'not recorded' }}</span></dd>
+    <dt>Evidence id</dt><dd><span class="mono">{{ record.id }}</span></dd>
+    {% if record.status is not none %}<dt>HTTP status</dt><dd>{{ record.status }}{% if record.content_type %} &middot; {{ record.content_type }}{% endif %}{% if record.from_cache %} &middot; served from the run's cache{% endif %}</dd>{% endif %}
+    {% if record.final_url and record.final_url != record.source_url %}<dt>Final URL</dt><dd>{{ ext(record.final_url) }}</dd>{% endif %}
+    {% if record.redirect_chain %}<dt>Redirects</dt><dd>{% for hop in record.redirect_chain %}{{ ext(hop) }}{% if not loop.last %} &rarr; {% endif %}{% endfor %}</dd>{% endif %}
+    {% if record.extraction_method %}<dt>Extraction</dt><dd><span class="mono">{{ record.extraction_method }}</span></dd>{% endif %}
+  </dl>
+  {% if record.locator_excerpt %}<blockquote class="excerpt">{{ record.locator_excerpt | truncate_text(600) }}</blockquote>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro evidence_list(records, unresolved=none, label='evidence') -%}
+{% if records %}
+<details class="evidence">
+  <summary>{{ records | length }} {{ label }} record{{ '' if records | length == 1 else 's' }}</summary>
+  {% for record in records %}{{ evidence_card(record) }}{% endfor %}
+  {% if unresolved %}<p class="meta">Evidence ids that do not resolve in this envelope: <span class="mono">{{ unresolved | join(', ') }}</span></p>{% endif %}
+</details>
+{% elif unresolved %}
+<p class="meta">This claim names evidence ({{ unresolved | join(', ') }}) that is not present in the envelope.</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro fact_value(row) -%}
+{% if row.known %}
+  {% if row.link %}{{ ext(row.link, row.display) }}{% else %}{{ row.display }}{% endif %}
+  {%- if row.fact.reporting_period %} <span class="meta nowrap">({{ row.fact.reporting_period | period }})</span>{% elif row.fact.effective_date %} <span class="meta nowrap">(as at {{ row.fact.effective_date }})</span>{% endif %}
+{% else %}
+  {{ state_badge(row.fact.availability) }}
+  {%- if row.fact.reason %} <span class="meta">{{ row.fact.reason }}</span>{% endif %}
+{% endif %}
+{%- endmacro %}
+
+{% macro leaf(value) -%}
+{%- if value is mapping -%}
+<span class="mono">{{ value | pretty_json | truncate_text(200) }}</span>
+{%- elif value is sequence and value is not string -%}
+{{ value | map('scalar') | join(', ') }}
+{%- elif value is string and (value | safe_url) -%}
+{{ ext(value) }}
+{%- else -%}
+{{ value | scalar }}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro structured_detail(value) -%}
+<dl class="kv" style="margin-top:6px">
+  {% for key, item in value.items() %}
+  {% if item is not none and item != [] and item != {} and item != '' %}
+  <dt>{{ field_label(key) }}</dt>
+  <dd>{{ leaf(item) }}</dd>
+  {% endif %}
+  {% endfor %}
+</dl>
+{%- endmacro %}
+
+{% macro fact_rows(rows) -%}
+{% for row in rows %}
+<tr id="{{ row.anchor }}">
+  <th scope="row">{{ row.fact.label }}</th>
+  <td>
+    {{ fact_value(row) }}
+    {% if row.known and row.structured is mapping %}{{ structured_detail(row.structured) }}{% endif %}
+    {% if row.evidence_missing %}<p class="meta">Published without a resolvable evidence record in this envelope.</p>{% endif %}
+    {{ evidence_list(row.evidence, row.unresolved) }}
+  </td>
+</tr>
+{% endfor %}
+{%- endmacro %}
+
+{% macro section_block(section) -%}
+<section id="section-{{ section.key }}">
+  <h2>{{ section.title }}</h2>
+  {% if section.status %}
+  <div class="notice warn">
+    <p><strong>{{ section.status.fact.label }}:</strong> {{ state_badge(section.status.fact.availability) }}
+      {% if section.status.fact.reason %} {{ section.status.fact.reason }}{% endif %}</p>
+    {{ evidence_list(section.status.evidence, section.status.unresolved) }}
+  </div>
+  {% endif %}
+  {% if section.rows %}
+  <div class="panel table-scroll">
+    <table class="facts">
+      <caption class="sr-only">{{ section.title }}</caption>
+      <tbody>{{ fact_rows(section.rows) }}</tbody>
+    </table>
+  </div>
+  {% elif not section.status %}
+  <p class="empty">This run recorded nothing in this section for this company.</p>
+  {% endif %}
+</section>
+{%- endmacro %}
+
+{% macro pager(page_obj, query) -%}
+<nav class="pagination" aria-label="Pagination">
+  {% if page_obj.has_previous %}
+  <a href="{{ query_string(query.to_params(page=1)) }}">&laquo; First</a>
+  <a href="{{ query_string(query.to_params(page=page_obj.page - 1)) }}" rel="prev">Previous</a>
+  {% else %}
+  <span class="disabled">&laquo; First</span><span class="disabled">Previous</span>
+  {% endif %}
+  {% for number in page_obj.window %}
+    {% if number == page_obj.page %}
+    <span aria-current="page">{{ number }}</span>
+    {% else %}
+    <a href="{{ query_string(query.to_params(page=number)) }}" aria-label="Page {{ number }}">{{ number }}</a>
+    {% endif %}
+  {% endfor %}
+  {% if page_obj.has_next %}
+  <a href="{{ query_string(query.to_params(page=page_obj.page + 1)) }}" rel="next">Next</a>
+  <a href="{{ query_string(query.to_params(page=page_obj.pages)) }}">Last &raquo;</a>
+  {% else %}
+  <span class="disabled">Next</span><span class="disabled">Last &raquo;</span>
+  {% endif %}
+  <span class="count">Page {{ page_obj.page }} of {{ page_obj.pages }} &middot; showing {{ page_obj.first_index }}&ndash;{{ page_obj.last_index }} of {{ page_obj.total }}</span>
+</nav>
+{%- endmacro %}

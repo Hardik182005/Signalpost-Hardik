@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Run {{ report.run_id }}{% endblock %}
+
+{% macro counts_table(title, mapping, label) -%}
+{% if mapping %}
+<div class="panel">
+  <h3 style="margin-top:0">{{ title }}</h3>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th scope="col">{{ label }}</th><th scope="col" class="num">Requests</th></tr></thead>
+      <tbody>
+        {% for key, count in mapping.items() %}
+        <tr><td class="mono">{{ key }}</td><td class="num">{{ count | integer }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% block content %}
+<p class="meta"><a href="/runs">&larr; All runs</a></p>
+<h1>Run {{ report.run_id }}</h1>
+<p class="lede">Measured from <span class="mono">{{ report.path.name }}</span>{% if is_current %} &mdash; this is the run whose envelopes are loaded{% endif %}.</p>
+
+<dl class="stat-grid">
+  <div class="stat"><dt>Companies</dt><dd>{{ report.results.get('envelopes', 0) }}<small> of {{ report.config.get('inputs', 0) }} requested</small></dd></div>
+  <div class="stat"><dt>Requests used</dt><dd>{{ report.budget.get('requests_used', 0) | integer }}<small> / {{ report.budget.get('max_requests', 0) | integer }}</small></dd></div>
+  <div class="stat"><dt>Requests per company</dt><dd>{{ report.budget.get('requests_per_company', '') }}</dd></div>
+  <div class="stat"><dt>Elapsed</dt><dd>{{ report.budget.get('seconds_elapsed') | seconds }}<small> / {{ report.budget.get('max_seconds') | seconds }}</small></dd></div>
+  <div class="stat"><dt>Spend</dt><dd>{% if report.budget.get('spend_usd') is not none %}${{ report.budget.get('spend_usd') }}{% else %}<small class="unknown">not recorded</small>{% endif %}<small> / ${{ report.budget.get('max_spend_usd', 0) }}</small></dd></div>
+  <div class="stat"><dt>Available claims</dt><dd>{{ report.results.get('claims_available', 0) | integer }}<small> / {{ report.results.get('claims_total', 0) | integer }}</small></dd></div>
+  <div class="stat"><dt>Evidence records</dt><dd>{{ report.results.get('evidence_total', 0) | integer }}</dd></div>
+  <div class="stat"><dt>Verified websites</dt><dd>{{ report.results.get('verified_websites', 0) }}</dd></div>
+</dl>
+
+<div class="panel">
+  <h2 style="margin-top:0">Terminal states</h2>
+  {% if report.terminal_states %}
+  <div class="tag-row">
+    {% for state, count in report.terminal_states.items() %}
+    <span class="badge {{ state }}">{{ terminal_labels.get(state, state) }}: {{ count }}</span>
+    {% endfor %}
+  </div>
+  <p class="meta">Counted from the envelopes the run actually wrote. Every company reaches exactly one terminal state.</p>
+  {% else %}
+  <p class="empty">This report records no terminal-state counts.</p>
+  {% endif %}
+  {% if report.results.get('budget_exhausted_after') %}
+  <p class="notice warn">The run stopped early: budget exhausted after {{ report.results.get('budget_exhausted_after') }}.</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Configuration recorded by the run</h2>
+  <dl class="kv">
+    {% for key, value in report.config.items() %}
+    <dt>{{ field_label(key) }}</dt>
+    <dd>{% if value is none %}<span class="unknown">not set</span>{% elif value is boolean %}{{ 'Yes' if value else 'No' }}{% else %}<span class="mono">{{ value }}</span>{% endif %}</dd>
+    {% endfor %}
+  </dl>
+</div>
+
+{% if report.results.get('seconds_per_company') %}
+<div class="panel">
+  <h2 style="margin-top:0">Time per company</h2>
+  <dl class="kv">
+    {% for key, value in report.results.get('seconds_per_company').items() %}
+    <dt>{{ key }}</dt><dd>{{ value | seconds }}</dd>
+    {% endfor %}
+  </dl>
+</div>
+{% endif %}
+
+{{ counts_table('Requests by purpose', report.budget.get('by_purpose'), 'Purpose') }}
+{{ counts_table('Requests by host', report.budget.get('top_hosts'), 'Host') }}
+
+{% if report.budget.get('denials') %}
+<div class="panel">
+  <h2 style="margin-top:0">Denied requests</h2>
+  <dl class="kv">
+    {% for key, value in report.budget.get('denials').items() %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}
+  </dl>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2 style="margin-top:0">Verification</h2>
+  {% if report.verification %}
+  <p><span class="badge {{ 'available' if report.ok else 'failed' }}">{{ 'passed' if report.ok else 'failed' }}</span>
+    checked {% if report.verification.get('checked_at') %}{{ report.verification.get('checked_at') | timestamp }}{% else %}<span class="unknown">at an unrecorded time</span>{% endif %}{% if report.verification.get('path') %} against <span class="mono">{{ report.verification.get('path') }}</span>{% endif %}.</p>
+  {% set v = report.verification %}
+  <dl class="kv">
+    {% for key, label in [('envelopes', 'Envelopes'), ('unique_companies', 'Unique companies'), ('expected', 'Expected'), ('missing_count', 'Missing'), ('unexpected_count', 'Unexpected')] %}
+    <dt>{{ label }}</dt><dd>{% if v.get(key) is not none %}{{ v.get(key) | integer }}{% else %}<span class="unknown">not recorded</span>{% endif %}</dd>
+    {% endfor %}
+    <dt>Duplicates</dt><dd>{% if v.get('duplicates') is sequence and v.get('duplicates') is not string %}{{ v.get('duplicates') | length }}{% else %}<span class="unknown">not recorded</span>{% endif %}</dd>
+    <dt>Exactly one envelope per input</dt><dd>{% if v.get('exactly_one_per_input') is none %}<span class="unknown">not recorded</span>{% elif v.get('exactly_one_per_input') %}Yes{% else %}No{% endif %}</dd>
+  </dl>
+  {% else %}
+  <p class="empty">This report carries no verification block.</p>
+  {% endif %}
+  {% if report.payload.get('official_qualification') %}
+  <p class="meta">Official qualification recorded by the run: <span class="mono">{{ report.payload.get('official_qualification') }}</span>.</p>
+  {% endif %}
+</div>
+
+<details class="evidence panel">
+  <summary>Raw report JSON</summary>
+  <pre class="json">{{ report.payload | pretty_json }}</pre>
+</details>
+
+<div class="actions">
+  <a class="button secondary small" href="/download/run/{{ report.run_id }}.json">Download this report</a>
+  <a class="button secondary small" href="/evidence">Claim and evidence inspector</a>
+  {% if is_current %}<a class="button secondary small" href="/download/envelopes.jsonl">Download the loaded envelopes</a>{% endif %}
+</div>
+{% endblock %}

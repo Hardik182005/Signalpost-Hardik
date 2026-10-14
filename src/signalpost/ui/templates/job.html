@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Job {{ job.id }}{% endblock %}
+
+{% block content %}
+<p class="meta"><a href="/research">&larr; Research</a></p>
+<h1>Job {{ job.id }}</h1>
+<p class="lede">A real pipeline run started from this interface, writing to <span class="mono">{{ job.output }}</span>. The progress figure below is the number of terminal envelopes actually on disk &mdash; it is counted, not animated.</p>
+
+<dl class="stat-grid">
+  <div class="stat"><dt>State</dt><dd><span class="badge {{ 'available' if job.state == 'completed' else ('failed' if job.state == 'failed' else 'partial') }}">{{ job.state }}</span></dd></div>
+  <div class="stat"><dt>Companies requested</dt><dd>{{ job.total }}</dd></div>
+  <div class="stat"><dt>Envelopes written</dt><dd>{{ job.completed }}</dd></div>
+  <div class="stat"><dt>Started</dt><dd><small>{{ job.started_at | timestamp if job.started_at else 'queued' }}</small></dd></div>
+  <div class="stat"><dt>Finished</dt><dd><small>{{ job.finished_at | timestamp if job.finished_at else 'not yet' }}</small></dd></div>
+</dl>
+
+<div class="panel" data-job-id="{{ job.id }}" data-job-finished="{{ 'true' if job.finished else 'false' }}">
+  <h2 style="margin-top:0">Progress</h2>
+  <div class="progress-track" role="img" aria-label="{{ job.completed }} of {{ job.total }} envelopes written">
+    <div class="progress-fill" style="width: {{ ((job.completed / job.total) * 100) | round(0, 'floor') if job.total else 0 }}%"></div>
+  </div>
+  <p class="meta" id="job-progress-text">{{ job.completed }} of {{ job.total }} envelopes written{% if not job.finished %} &middot; this page does not auto-refresh unless the job is running{% endif %}.</p>
+  {% if job.offline %}<p class="meta">This job was started in offline mode: the pipeline runs without outbound requests, so results are the pipeline's own not-available states rather than fetched data.</p>{% endif %}
+  {% if not job.finished %}
+  <div class="actions"><a class="button secondary small" href="/jobs/{{ job.id }}">Refresh</a><a class="button secondary small" href="/api/jobs/{{ job.id }}">Job JSON</a></div>
+  {% endif %}
+</div>
+
+{% if job.error %}
+<div class="notice bad">
+  <h2 style="margin-top:0">The job failed</h2>
+  <p class="mono">{{ job.error }}</p>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2 style="margin-top:0">Requested companies</h2>
+  <div class="tag-row">
+    {% for org in job.inputs %}<a class="badge" href="/companies/{{ org }}">{{ org }}</a>{% endfor %}
+  </div>
+</div>
+
+{% if results %}
+<h2>Envelopes written by this job</h2>
+{% if results.load_error %}
+<p class="empty">{{ results.load_error }}</p>
+{% else %}
+<div class="panel table-scroll">
+  <table>
+    <thead><tr><th scope="col">Company</th><th scope="col">Org. number</th><th scope="col">Status</th><th scope="col" class="num">Claims</th><th scope="col" class="num">Evidence</th></tr></thead>
+    <tbody>
+      {% for row in results.rows %}
+      <tr>
+        <td>{{ row.display_name }}</td>
+        <td class="mono">{{ row.organisation_number }}</td>
+        <td>{{ ui.status_badge(row.terminal_status) }}</td>
+        <td class="num">{{ row.claims_available }} / {{ row.claims_total }}</td>
+        <td class="num">{{ row.evidence_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="meta">These rows come from the job's own output file. To browse them with the full interface, restart the server with <span class="mono">--input {{ job.output }}</span>.</p>
+{% endif %}
+{% else %}
+<p class="empty">No output file exists yet for this job.</p>
+{% endif %}
+
+{% if job.report %}
+<details class="evidence panel">
+  <summary>Run report written by this job</summary>
+  <pre class="json">{{ job.report | pretty_json }}</pre>
+</details>
+{% endif %}
+{% endblock %}

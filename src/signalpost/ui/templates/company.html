@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% set row = profile.row %}
+{% block title %}{{ row.display_name }}{% endblock %}
+
+{% block content %}
+<p class="meta"><a href="/companies{{ back }}">&larr; Back to the company list</a></p>
+
+<h1>{{ row.display_name }}</h1>
+<p class="lede">
+  <span class="mono">{{ profile.organisation_number }}</span> &middot; {{ ui.status_badge(row.terminal_status) }}
+  {% if row.last_checked %}&middot; last checked {{ row.last_checked | timestamp }}{% else %}&middot; <span class="unknown">no check timestamp recorded</span>{% endif %}
+  {% if row.run_id %}&middot; run <a href="/runs/{{ row.run_id }}">{{ row.run_id }}</a>{% endif %}
+</p>
+
+<dl class="stat-grid">
+  <div class="stat"><dt>Available claims</dt><dd>{{ row.claims_available }}<small> / {{ row.claims_total }}</small></dd></div>
+  <div class="stat"><dt>Evidence records</dt><dd>{{ row.evidence_count }}</dd></div>
+  <div class="stat"><dt>Snapshots fetched</dt><dd>{{ row.snapshot_count }}</dd></div>
+  <div class="stat"><dt>Requests used</dt><dd>{% if profile.operations.get('requests_used') is not none %}{{ profile.operations.get('requests_used') }}{% else %}<small class="unknown">not recorded</small>{% endif %}</dd></div>
+  <div class="stat"><dt>Changes</dt><dd>{% if row.changes_total %}<a href="/changes/{{ profile.organisation_number }}">{{ row.changes_total }}</a>{% else %}0{% endif %}</dd></div>
+</dl>
+
+{% if profile.errors %}
+<div class="notice warn">
+  <h2>The run recorded {{ profile.errors | length }} problem{{ '' if profile.errors | length == 1 else 's' }} for this company</h2>
+  <ul class="inline-list">
+    {% for error in profile.errors %}
+    <li><span class="mono">{{ error.get('stage', 'stage not stated') }}</span> &middot; {{ error.get('kind', 'error') }}: {{ error.get('detail', '') | truncate_text(300) }}
+      {% if error.get('url') %}<br>{{ ui.ext(error.get('url')) }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<section id="section-summary">
+  <h2>Grounded summary</h2>
+  {% if profile.sentences %}
+  <div class="panel">
+    <ul class="inline-list">
+      {% for sentence in profile.sentences %}
+      <li>
+        <p>{{ sentence.text }}</p>
+        {% if sentence.rows %}
+        <details class="evidence">
+          <summary>Open the {{ sentence.rows | length }} claim{{ '' if sentence.rows | length == 1 else 's' }} this sentence was written from</summary>
+          <div class="table-scroll">
+            <table class="facts"><tbody>{{ ui.fact_rows(sentence.rows) }}</tbody></table>
+          </div>
+        </details>
+        {% else %}
+        <p class="meta">This sentence records no claim keys, so its supporting claims cannot be opened here.</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="meta">Summary confidence recorded by the run: <strong>{{ row.confidence }}</strong>. Sentences are generated from the claims above and are not model-written prose.</p>
+  </div>
+  {% else %}
+  <p class="empty">No summary was generated for this company.</p>
+  {% endif %}
+
+  {% if profile.gaps %}
+  <div class="notice">
+    <h3>Stated gaps</h3>
+    <ul class="inline-list">{% for gap in profile.gaps %}<li>{{ gap }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+</section>
+
+{{ ui.section_block(profile.identity) }}
+{{ ui.section_block(profile.description) }}
+
+<section id="section-accounts">
+  <h2>Annual accounts</h2>
+  {% if profile.accounts_status %}
+  <div class="notice warn">
+    <p><strong>{{ profile.accounts_status.fact.label }}:</strong> {{ ui.state_badge(profile.accounts_status.fact.availability) }}
+      {% if profile.accounts_status.fact.reason %} {{ profile.accounts_status.fact.reason }}{% endif %}</p>
+    {{ ui.evidence_list(profile.accounts_status.evidence, profile.accounts_status.unresolved) }}
+  </div>
+  {% endif %}
+  {% if profile.accounts %}
+  {% for period in profile.accounts %}
+  <div class="panel">
+    <h3 style="margin-top:0">Reporting period {{ period.period | period }}{% if period.currency %} &middot; figures in {{ period.currency }}{% else %} &middot; <span class="unknown">currency not stated</span>{% endif %}</h3>
+    <div class="table-scroll">
+      <table class="facts"><tbody>{{ ui.fact_rows(period.figures + [period.audited] if period.audited else period.figures) }}</tbody></table>
+    </div>
+  </div>
+  {% endfor %}
+  {% elif not profile.accounts_status %}
+  <p class="empty">No filed accounts were recorded for this company in this run.</p>
+  {% endif %}
+</section>
+
+{{ ui.section_block(profile.people) }}
+{{ ui.section_block(profile.locations) }}
+{{ ui.section_block(profile.subunits) }}
+
+<section id="section-web">
+  <h2>Website and owned profiles</h2>
+  {% if profile.website_verdict %}
+  {% set verdict = profile.website_verdict %}
+  <div class="panel">
+    <h3 style="margin-top:0">Website verification</h3>
+    <dl class="kv">
+      <dt>Candidate</dt><dd>{% if verdict.get('candidate') %}{{ ui.ext(verdict.get('candidate')) }}{% else %}<span class="unknown">none considered</span>{% endif %}</dd>
+      <dt>Decision</dt><dd><span class="badge {{ 'available' if verdict.get('decision') == 'published' else 'ambiguous' }}">{{ verdict.get('decision', 'not stated') }}</span></dd>
+      <dt>Confidence</dt><dd>{% if verdict.get('confidence') is not none %}{{ verdict.get('confidence') }}{% else %}<span class="unknown">not stated</span>{% endif %}</dd>
+      <dt>Reason</dt><dd>{{ verdict.get('reason', '') }}</dd>
+    </dl>
+    {% if verdict.get('signals') %}
+    <details class="evidence">
+      <summary>{{ verdict.get('signals') | length }} verification signal{{ '' if verdict.get('signals') | length == 1 else 's' }}</summary>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">Signal</th><th scope="col">Strength</th><th scope="col">Detail</th><th scope="col" class="num">Weight</th></tr></thead>
+          <tbody>
+            {% for signal in verdict.get('signals') %}
+            <tr>
+              <td class="mono">{{ signal.get('signal', '') }}</td>
+              <td>{{ signal.get('strength', '') }}</td>
+              <td>{{ signal.get('detail', '') | truncate_text(200) }}</td>
+              <td class="num">{{ signal.get('weight', '') }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if profile.web.rows %}
+  <div class="panel table-scroll">
+    <table class="facts"><tbody>{{ ui.fact_rows(profile.web.rows) }}</tbody></table>
+  </div>
+  {% else %}
+  <p class="empty">No website or owned profile was published for this company.</p>
+  {% endif %}
+</section>
+
+{{ ui.section_block(profile.contact) }}
+{{ ui.section_block(profile.jobs) }}
+{{ ui.section_block(profile.activity) }}
+{% if profile.other.rows %}{{ ui.section_block(profile.other) }}{% endif %}
+
+<section id="section-provenance">
+  <h2>Provenance and run diagnostics</h2>
+  <div class="panel">
+    <dl class="kv">
+      <dt>Envelope schema</dt><dd class="mono">{{ profile.envelope.get('schema_version', '') }}</dd>
+      <dt>Run</dt><dd class="mono">{{ row.run_id or 'not stated' }}</dd>
+      <dt>Started</dt><dd>{{ row.started_at | timestamp if row.started_at else 'not stated' }}</dd>
+      <dt>Completed</dt><dd>{{ row.completed_at | timestamp if row.completed_at else 'not stated' }}</dd>
+      <dt>Terminal status</dt><dd>{{ ui.status_badge(row.terminal_status) }} {% if profile.operations.get('terminal_reason') %}<span class="meta">{{ profile.operations.get('terminal_reason') }}</span>{% endif %}</dd>
+      <dt>Pipeline version</dt><dd class="mono">{{ profile.operations.get('pipeline_version', 'not stated') }}</dd>
+      <dt>Baseline compared against</dt><dd>{% if profile.refresh.get('compared_against') %}<span class="mono">{{ profile.refresh.get('compared_against') }}</span>{% else %}<span class="unknown">none</span>{% if profile.refresh.get('note') %} &mdash; {{ profile.refresh.get('note') }}{% endif %}{% endif %}</dd>
+    </dl>
+  </div>
+
+  <details class="evidence panel">
+    <summary>{{ profile.snapshots | length }} snapshot{{ '' if profile.snapshots | length == 1 else 's' }} fetched for this company</summary>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">Retrieved</th><th scope="col">URL</th><th scope="col" class="num">Status</th><th scope="col">Type</th><th scope="col" class="num">Size</th><th scope="col">Content hash</th></tr></thead>
+        <tbody>
+          {% for snapshot in profile.snapshots %}
+          <tr>
+            <td class="nowrap">{{ snapshot.get('retrieved_at') | timestamp }}</td>
+            <td>{{ ui.ext(snapshot.get('requested_url')) }}{% if snapshot.get('from_cache') %} <span class="badge">cache</span>{% endif %}</td>
+            <td class="num">{{ snapshot.get('status') if snapshot.get('status') is not none else '—' }}</td>
+            <td>{{ snapshot.get('content_type') or '' }}</td>
+            <td class="num">{{ snapshot.get('bytes_received') | filesize }}</td>
+            <td class="mono" title="{{ snapshot.get('content_sha256') or '' }}">{{ snapshot.get('content_sha256') | shorthash }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <div class="actions">
+    <a class="button secondary small" href="/api/companies/{{ profile.organisation_number }}">Envelope JSON</a>
+    <a class="button secondary small" href="/evidence?org={{ profile.organisation_number }}">Open in the evidence inspector</a>
+    <a class="button secondary small" href="/download/claims.csv?q={{ profile.organisation_number }}">Claims CSV</a>
+    <a class="button secondary small" href="/download/evidence.csv?q={{ profile.organisation_number }}">Evidence CSV</a>
+  </div>
+</section>
+{% endblock %}

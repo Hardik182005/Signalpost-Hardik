@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Claim and evidence inspector{% endblock %}
+
+{% macro inspector_link(number) -%}
+{{ query_string([('org', filters.org), ('field', filters.field), ('family', filters.family), ('availability', filters.availability), ('source', filters.source), ('page', number)]) }}
+{%- endmacro %}
+
+{% block content %}
+<h1>Claim and evidence inspector</h1>
+<p class="lede">One row per claim in <span class="mono">{{ dataset.label }}</span>, joined to the evidence records and snapshots it was extracted from. This is the developer-facing view: locators, hashes, HTTP status and redirect chains are shown in full.</p>
+
+<form class="panel" method="get" action="/evidence">
+  <div class="filters">
+    <div class="field">
+      <label for="org">Organisation number</label>
+      <input type="text" id="org" name="org" value="{{ filters.org }}" maxlength="12" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label for="field">Field</label>
+      <select id="field" name="field">
+        <option value="">Any field</option>
+        {% for name in fields %}<option value="{{ name }}"{% if filters.field == name %} selected{% endif %}>{{ field_label(name) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="family">Family</label>
+      <select id="family" name="family">
+        <option value="">Any family</option>
+        {% for name in families %}<option value="{{ name }}"{% if filters.family == name %} selected{% endif %}>{{ family_labels.get(name, name) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="availability">Availability</label>
+      <select id="availability" name="availability">
+        <option value="">Any state</option>
+        {% for state in availability_states %}<option value="{{ state }}"{% if filters.availability == state %} selected{% endif %}>{{ availability_labels.get(state, state) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="source">Source URL contains</label>
+      <input type="text" id="source" name="source" value="{{ filters.source }}" maxlength="200">
+    </div>
+  </div>
+  <div class="actions">
+    <button type="submit">Apply</button>
+    <a class="button secondary" href="/evidence">Clear</a>
+    <span class="meta">{{ total | integer }} matching claim{{ '' if total == 1 else 's' }}</span>
+  </div>
+</form>
+
+{% if truncated %}
+<div class="notice warn"><p>The inspector stops after the first {{ total }} matching claims so a large run cannot be walked into an unbounded page. Narrow the filters to see the rest.</p></div>
+{% endif %}
+
+{% if not rows %}
+<div class="notice info">
+  <p><strong>No claim matches those filters.</strong> The loaded run holds {{ dataset.count }} {{ 'company' if dataset.count == 1 else 'companies' }}; nothing in it satisfies every condition set above.</p>
+</div>
+{% else %}
+{% for row in rows %}
+{% set claim = row.claim %}
+<div class="panel">
+  <h2 style="margin-top:0">{{ field_label(claim.get('field', '')) }}
+    {{ ui.state_badge(claim.get('availability', not_recorded)) }}
+  </h2>
+  <p class="meta">
+    <a href="/companies/{{ row.organisation_number }}">{{ row.organisation_number }}</a> &middot;
+    <span class="mono">{{ claim.get('claim_key', '') }}</span> &middot;
+    {{ family_labels.get(claim.get('family', ''), claim.get('family', '')) }}
+    {% if claim.get('reporting_period') %} &middot; {{ claim.get('reporting_period') | period }}{% endif %}
+    {% if claim.get('last_observed_at') %} &middot; observed {{ claim.get('last_observed_at') | timestamp }}{% endif %}
+  </p>
+  <p>
+    {% if claim.get('availability') == 'available' %}
+      <strong>Value:</strong>
+      {% if claim.get('value') is mapping or (claim.get('value') is sequence and claim.get('value') is not string) %}
+      <span class="mono">{{ claim.get('value') | pretty_json | truncate_text(400) }}</span>
+      {% else %}
+      {{ claim.get('value') | scalar | truncate_text(400) }}
+      {% endif %}
+      {% if claim.get('currency') %} <span class="meta">{{ claim.get('currency') }}</span>{% endif %}
+    {% else %}
+      <span class="unknown">No value published.</span> {{ claim.get('reason') or '' }}
+    {% endif %}
+  </p>
+  {{ ui.evidence_list(row.evidence, row.unresolved) }}
+</div>
+{% endfor %}
+
+<nav class="pagination" aria-label="Pagination">
+  {% if page_number > 1 %}<a href="{{ inspector_link(page_number - 1) }}" rel="prev">Previous</a>{% else %}<span class="disabled">Previous</span>{% endif %}
+  <span aria-current="page">{{ page_number }}</span>
+  {% if page_number < pages %}<a href="{{ inspector_link(page_number + 1) }}" rel="next">Next</a>{% else %}<span class="disabled">Next</span>{% endif %}
+  <span class="count">Page {{ page_number }} of {{ pages }} &middot; {{ total | integer }} claims</span>
+</nav>
+{% endif %}
+{% endblock %}

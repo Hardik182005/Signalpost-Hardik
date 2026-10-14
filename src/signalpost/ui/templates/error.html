@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+<div class="notice bad">
+  <p>{{ message }}</p>
+  <p class="meta">HTTP {{ status_code }}. The request was checked on the server, and this is the reason it was not answered &mdash; nothing partial or invented was rendered instead.</p>
+</div>
+<div class="actions">
+  <a class="button secondary" href="/companies">Company explorer</a>
+  <a class="button secondary" href="/changes">Changes</a>
+  <a class="button secondary" href="/runs">Runs and evidence</a>
+</div>
+{% endblock %}

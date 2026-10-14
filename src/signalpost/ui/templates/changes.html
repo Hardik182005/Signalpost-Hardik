@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Changes{% endblock %}
+
+{% block content %}
+<h1>Changes between runs</h1>
+<p class="lede">Change events are written by the pipeline when a run is compared against an earlier one. Nothing on this page is replayed from a fixture; if a run found no changes, that is what it says.</p>
+
+<dl class="stat-grid">
+  <div class="stat"><dt>Companies with a change</dt><dd>{{ overview.companies_with_changes }}</dd></div>
+  <div class="stat"><dt>Change events</dt><dd>{{ overview.total_changes }}</dd></div>
+  <div class="stat"><dt>Material changes</dt><dd>{{ overview.material_changes }}</dd></div>
+  <div class="stat"><dt>Compared against a baseline</dt><dd>{{ overview.compared_count }}<small> of {{ dataset.count }}</small></dd></div>
+  <div class="stat"><dt>First observations</dt><dd>{{ overview.first_observation_count }}</dd></div>
+</dl>
+
+<div class="panel">
+  <h2 style="margin-top:0">What this run was compared against</h2>
+  {% if overview.compared_against %}
+  <p>Baseline run{{ '' if overview.compared_against | length == 1 else 's' }} named in the envelopes: {% for run in overview.compared_against %}<span class="mono">{{ run }}</span>{{ ', ' if not loop.last }}{% endfor %}.</p>
+  {% if overview.baseline_label %}
+  <p class="meta">The baseline envelope file was located (<span class="mono">{{ overview.baseline_label }}</span>), so the &ldquo;before&rdquo; side of each diff can open its own evidence.</p>
+  {% else %}
+  <p class="meta">The baseline envelope file was not located, so the &ldquo;before&rdquo; side of each diff shows the recorded previous value without its original evidence record. Start the server with <span class="mono">--baseline &lt;previous run .jsonl&gt;</span> to resolve it.</p>
+  {% endif %}
+  {% else %}
+  <p>No envelope in this run names a baseline run. Every company here is a first observation, so there is nothing to diff against yet.</p>
+  {% endif %}
+
+  {% if overview.notes %}
+  <h3>Refresh notes recorded by the run</h3>
+  <ul class="inline-list">
+    {% for note, count in overview.notes.items() %}
+    <li>{{ note }} <span class="meta">&mdash; {{ count }} {{ 'company' if count == 1 else 'companies' }}</span></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+{% if not overview.has_changes %}
+<div class="notice info">
+  <h2 style="margin-top:0">No changes recorded in this run</h2>
+  {% if overview.had_baseline %}
+  <p>{{ overview.compared_count }} {{ 'company was' if overview.compared_count == 1 else 'companies were' }} compared against an earlier run and every compared claim matched. A re-run that finds nothing is a real result, and it is the expected one for a stable registry record.</p>
+  {% else %}
+  <p>This run had no baseline to compare against, so no change could be detected. The pipeline records this per company as a first observation rather than as &ldquo;no change&rdquo;.</p>
+  <p class="meta">To see real change detection, load a refreshed run: <span class="mono">serve.py --input &lt;refresh run&gt;.jsonl --baseline &lt;first run&gt;.jsonl</span>.</p>
+  {% endif %}
+</div>
+{% else %}
+<h2>Companies with recorded changes</h2>
+<div class="panel table-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Company</th><th scope="col">Org. number</th><th scope="col" class="num">Changes</th>
+        <th scope="col" class="num">Material</th><th scope="col">Status</th><th scope="col">Last checked</th><th scope="col"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><a href="/changes/{{ row.organisation_number }}">{{ row.display_name }}</a></td>
+        <td class="mono">{{ row.organisation_number }}</td>
+        <td class="num">{{ row.changes_total }}</td>
+        <td class="num">{% if row.changes_material %}<span class="badge material">{{ row.changes_material }}</span>{% else %}0{% endif %}</td>
+        <td>{{ ui.status_badge(row.terminal_status) }}</td>
+        <td class="nowrap">{% if row.last_checked %}{{ row.last_checked | timestamp }}{% else %}<span class="unknown">not recorded</span>{% endif %}</td>
+        <td><a href="/companies/{{ row.organisation_number }}">Profile</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

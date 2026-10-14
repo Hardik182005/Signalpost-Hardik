@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Runs and evidence{% endblock %}
+
+{% block content %}
+<h1>Runs and evidence</h1>
+<p class="lede">Every figure here is read from a <span class="mono">*-report.json</span> written by the batch runner at the end of a run. Nothing is recomputed, estimated or averaged by this interface; a figure the run did not record is shown as not recorded.</p>
+
+<div class="panel">
+  <h2 style="margin-top:0">How this server was started</h2>
+  <dl class="kv">
+    <dt>Envelope file</dt><dd class="mono">{{ config.input_path }}</dd>
+    <dt>Companies loaded</dt><dd>{{ dataset.count }}{% if dataset.truncated %} <span class="badge partial">truncated by --max-records</span>{% endif %}</dd>
+    <dt>Report directory</dt><dd class="mono">{{ config.resolved_reports_dir }}</dd>
+    <dt>Baseline override</dt><dd>{% if config.baseline_path %}<span class="mono">{{ config.baseline_path }}</span>{% else %}<span class="unknown">none (resolved from run reports)</span>{% endif %}</dd>
+    <dt>Research action</dt><dd>{% if research_enabled %}<span class="badge partial">enabled</span> writing only to <span class="mono">{{ config.scratch_dir }}</span>{% if config.research_offline %} &middot; offline mode: no outbound requests{% endif %}{% else %}<span class="badge">disabled</span> &mdash; this server cannot start a crawl{% endif %}</dd>
+  </dl>
+  <div class="actions">
+    <a class="button secondary small" href="/api/dataset">Dataset JSON</a>
+    <a class="button secondary small" href="/health">Health</a>
+    <a class="button secondary small" href="/evidence">Claim and evidence inspector</a>
+  </div>
+</div>
+
+<h2>Run reports found beside the envelope file</h2>
+{% if not reports %}
+<p class="empty">No <span class="mono">*-report.json</span> file was found in <span class="mono">{{ config.resolved_reports_dir }}</span>, so no measured run figures can be shown. Point <span class="mono">--reports-dir</span> at the directory holding them.</p>
+{% else %}
+<div class="panel table-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Run</th><th scope="col">Started</th><th scope="col" class="num">Companies</th>
+        <th scope="col">Terminal states</th><th scope="col" class="num">Requests</th><th scope="col" class="num">Spend</th>
+        <th scope="col" class="num">Elapsed</th><th scope="col">Verification</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for report in reports %}
+      <tr>
+        <td><a href="/runs/{{ report.run_id }}">{{ report.run_id }}</a>{% if report is sameas current %} <span class="badge material">loaded</span>{% endif %}<br><span class="meta mono">{{ report.path.name }}</span></td>
+        <td class="nowrap">{% if report.started_at %}{{ report.started_at | timestamp }}{% else %}<span class="unknown">not recorded</span>{% endif %}
+          {% if not report.complete %}<br><span class="badge partial">no completion time recorded</span>{% endif %}</td>
+        <td class="num">{{ report.results.get('envelopes', 0) }}</td>
+        <td>
+          {% for state, count in report.terminal_states.items() %}
+          <span class="badge {{ state }}">{{ terminal_labels.get(state, state) }} {{ count }}</span>
+          {% else %}<span class="unknown">not recorded</span>{% endfor %}
+        </td>
+        <td class="num">{{ report.budget.get('requests_used', 0) | integer }}<span class="meta"> / {{ report.budget.get('max_requests', 0) | integer }}</span></td>
+        <td class="num">{% if report.budget.get('spend_usd') is not none %}${{ report.budget.get('spend_usd') }}{% else %}<span class="unknown">n/r</span>{% endif %}</td>
+        <td class="num nowrap">{{ report.budget.get('seconds_elapsed') | seconds }}</td>
+        <td>{% if report.verification %}<span class="badge {{ 'available' if report.ok else 'failed' }}">{{ 'passed' if report.ok else 'failed' }}</span>{% else %}<span class="unknown">not recorded</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<h2>Research jobs started from this interface</h2>
+{% if not research_enabled %}
+<p class="empty">Research is disabled on this server, so no job can exist. Start it with <span class="mono">--enable-research</span> to allow the interface to run the real pipeline into <span class="mono">{{ config.scratch_dir }}</span>.</p>
+{% elif not jobs %}
+<p class="empty">No job has been started in this server process.</p>
+{% else %}
+<div class="panel table-scroll">
+  <table>
+    <thead><tr><th scope="col">Job</th><th scope="col">State</th><th scope="col" class="num">Companies</th><th scope="col" class="num">Envelopes written</th><th scope="col">Output</th></tr></thead>
+    <tbody>
+      {% for job in jobs %}
+      <tr>
+        <td><a href="/jobs/{{ job.id }}">{{ job.id }}</a><br><span class="meta">{{ job.created_at | timestamp }}</span></td>
+        <td><span class="badge {{ 'available' if job.state == 'completed' else ('failed' if job.state == 'failed' else 'partial') }}">{{ job.state }}</span></td>
+        <td class="num">{{ job.total }}</td>
+        <td class="num">{{ job.completed }}</td>
+        <td class="mono">{{ job.output }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

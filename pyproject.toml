@@ -22,12 +22,21 @@ sentiment = [
   "torch>=2.5,<3",
   "transformers>=4.51,<5",
 ]
+# Web interface only. The evaluator path (main.py -> signalpost.runner) imports none
+# of this, so `uv sync` without the `ui` extra still runs the agent.
+ui = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "jinja2>=3.1,<4",
+  "python-multipart>=0.0.9,<1",
+]
 
 [tool.uv]
 package = false
 
 [dependency-groups]
 dev = [
+  "httpx>=0.28,<1",
   "pytest>=8.3,<9",
 ]
 

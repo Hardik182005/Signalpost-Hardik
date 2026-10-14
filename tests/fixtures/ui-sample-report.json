@@ -1,0 +1,76 @@
+{
+  "schema_version": "signalpost.run_report/1",
+  "config": {
+    "run_id": "ui-sample",
+    "inputs": 13,
+    "output": "tests/fixtures/ui-sample.jsonl",
+    "concurrency": 2,
+    "max_requests": 500,
+    "max_seconds": 600,
+    "max_spend_usd": 0.0,
+    "max_pages_per_company": 5,
+    "previous_snapshot": null,
+    "offline": true,
+    "pipeline_version": "1.0.0"
+  },
+  "results": {
+    "started_at": "2026-01-10T09:00:00Z",
+    "completed_at": "2026-01-10T09:00:30Z",
+    "envelopes": 13,
+    "terminal_states": {
+      "completed": 4,
+      "failed": 1,
+      "partial": 8
+    },
+    "claims_available": 46,
+    "claims_total": 49,
+    "evidence_total": 46,
+    "verified_websites": 1,
+    "changes_total": 0,
+    "changes_material": 0,
+    "seconds_per_company": {
+      "median": 30.0,
+      "p90": 30.0,
+      "max": 30.0
+    },
+    "budget_exhausted_after": null
+  },
+  "budget": {
+    "requests_used": 18,
+    "max_requests": 500,
+    "requests_per_company": 1.38,
+    "seconds_elapsed": 30.0,
+    "max_seconds": 600.0,
+    "spend_usd": 0.0,
+    "max_spend_usd": 0.0,
+    "denials": {},
+    "by_purpose": {
+      "registry_entity": 18
+    },
+    "top_hosts": {
+      "registry.example": 18
+    }
+  },
+  "verification": {
+    "checked_at": "2026-09-14T11:53:47Z",
+    "path": "tests/fixtures/ui-sample.jsonl",
+    "envelopes": 13,
+    "unique_companies": 13,
+    "terminal_states": {
+      "completed": 4,
+      "failed": 1,
+      "partial": 8
+    },
+    "duplicates": [],
+    "invalid_terminal_states": [],
+    "envelopes_missing_required_keys": [],
+    "expected": 13,
+    "missing": [],
+    "missing_count": 0,
+    "unexpected": [],
+    "unexpected_count": 0,
+    "exactly_one_per_input": true,
+    "ok": true
+  },
+  "official_qualification": null
+}

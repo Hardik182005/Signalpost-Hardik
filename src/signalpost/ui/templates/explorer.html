@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Companies{% endblock %}
+
+{% macro sort_th(key, label, numeric=false) -%}
+{% set active = query.sort == key %}
+{% set next_order = 'desc' if active and query.order == 'asc' else 'asc' %}
+<th scope="col"{% if numeric %} class="num"{% endif %}{% if active %} aria-sort="{{ 'ascending' if query.order == 'asc' else 'descending' }}"{% endif %}>
+  <a href="{{ query_string(query.to_params(sort=key, order=next_order, page=1)) }}">{{ label }}{% if active %}{{ ' ▲' if query.order == 'asc' else ' ▼' }}{% endif %}</a>
+</th>
+{%- endmacro %}
+
+{% block content %}
+<h1>Company explorer</h1>
+<p class="lede">Every row below was produced by the run in <span class="mono">{{ dataset.label }}</span>. Blank is never used for a value we do not have: a field with no claim is marked <em>not recorded</em>, and a field the source did not carry is marked <em>not available</em>.</p>
+
+<dl class="stat-grid">
+  <div class="stat"><dt>Companies in this run</dt><dd>{{ dataset.count | integer }}</dd></div>
+  <div class="stat"><dt>Matching the current filters</dt><dd>{{ results.total | integer }}</dd></div>
+  <div class="stat"><dt>With a verified website</dt><dd>{{ dataset.rows | selectattr('website.known') | list | length | integer }}</dd></div>
+  <div class="stat"><dt>Companies with changes</dt><dd>{{ dataset.changed_rows() | length | integer }}</dd></div>
+  {% if report %}<div class="stat"><dt>Requests used by the run</dt><dd>{{ report.budget.get('requests_used') | integer }}<small> / {{ report.budget.get('max_requests') | integer }}</small></dd></div>{% endif %}
+</dl>
+
+<form class="panel" method="get" action="/companies" role="search">
+  <h2 style="margin-top:0">Search and filter</h2>
+  <div class="filters">
+    <div class="field" style="grid-column: span 2">
+      <label for="q">Organisation number or company name</label>
+      <input type="search" id="q" name="q" value="{{ query.q }}" maxlength="120" placeholder="e.g. 989925970 or Semaphore" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="city">City</label>
+      <select id="city" name="city">
+        <option value="">Any city</option>
+        {% for city in cities %}<option value="{{ city }}"{% if query.city == city %} selected{% endif %}>{{ city }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="industry">Industry code or label contains</label>
+      <input type="text" id="industry" name="industry" value="{{ query.industry }}" maxlength="80">
+    </div>
+    <div class="field">
+      <label for="website">Website</label>
+      <select id="website" name="website">
+        <option value="any"{% if query.website == 'any' %} selected{% endif %}>Any</option>
+        <option value="verified"{% if query.website == 'verified' %} selected{% endif %}>Verified website published</option>
+        <option value="none"{% if query.website == 'none' %} selected{% endif %}>No verified website</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="changed">Changes</label>
+      <select id="changed" name="changed">
+        <option value="any"{% if query.changed == 'any' %} selected{% endif %}>Any</option>
+        <option value="changed"{% if query.changed == 'changed' %} selected{% endif %}>Changed since baseline</option>
+        <option value="material"{% if query.changed == 'material' %} selected{% endif %}>Material change</option>
+        <option value="unchanged"{% if query.changed == 'unchanged' %} selected{% endif %}>No change recorded</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="family">Field family</label>
+      <select id="family" name="family">
+        <option value="">Any family</option>
+        {% for name in families %}<option value="{{ name }}"{% if query.family == name %} selected{% endif %}>{{ family_labels.get(name, name) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="availability">&hellip;with availability</label>
+      <select id="availability" name="availability">
+        <option value="">Any state</option>
+        {% for state in availability_states %}<option value="{{ state }}"{% if query.availability == state %} selected{% endif %}>{{ availability_labels.get(state, state) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="employees_min">Employees from</label>
+      <input type="number" id="employees_min" name="employees_min" min="0" max="10000000" value="{{ query.employees_min if query.employees_min is not none else '' }}">
+    </div>
+    <div class="field">
+      <label for="employees_max">Employees to</label>
+      <input type="number" id="employees_max" name="employees_max" min="0" max="10000000" value="{{ query.employees_max if query.employees_max is not none else '' }}">
+    </div>
+    <div class="field">
+      <label for="revenue_min">Revenue at least</label>
+      <input type="text" inputmode="numeric" id="revenue_min" name="revenue_min" value="{{ query.revenue_min if query.revenue_min is not none else '' }}">
+    </div>
+    <div class="field">
+      <label for="page_size">Rows per page</label>
+      <select id="page_size" name="page_size">
+        {% for size in page_sizes %}<option value="{{ size }}"{% if query.page_size == size %} selected{% endif %}>{{ size }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field" style="grid-column: span 2">
+      <fieldset class="checks">
+        <legend>Terminal status</legend>
+        <div class="row">
+          {% for state in statuses %}
+          <label><input type="checkbox" name="status" value="{{ state }}"{% if state in query.status %} checked{% endif %}> {{ terminal_labels.get(state, state) }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </div>
+  </div>
+  <input type="hidden" name="sort" value="{{ query.sort }}">
+  <input type="hidden" name="order" value="{{ query.order }}">
+  <div class="actions">
+    <button type="submit">Apply filters</button>
+    {% if query.is_filtered %}<a class="button secondary" href="/companies">Clear</a>{% endif %}
+    <span class="meta">Filters cover only fields this run actually stores. Every value is checked on the server.</span>
+  </div>
+</form>
+
+{% if not dataset.count %}
+<p class="empty">No companies were loaded, so there is nothing to filter.</p>
+{% elif not results.total %}
+<div class="notice info">
+  <p><strong>No company in this run matches those filters.</strong> {{ dataset.count }} {{ 'company is' if dataset.count == 1 else 'companies are' }} loaded; none satisfies every condition you set.</p>
+  <p class="meta">This is an empty result, not an error and not a missing dataset. <a href="/companies">Clear the filters</a> to see the full run.</p>
+</div>
+{% else %}
+<form method="get" action="/compare">
+  <div class="panel table-scroll" style="padding:0">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col"><span class="meta">Compare</span></th>
+          {{ sort_th('name', 'Company') }}
+          {{ sort_th('organisation_number', 'Org. number') }}
+          {{ sort_th('status', 'Status') }}
+          <th scope="col">Industry</th>
+          <th scope="col">City</th>
+          {{ sort_th('employees', 'Employees', true) }}
+          {{ sort_th('revenue', 'Latest revenue', true) }}
+          <th scope="col">Website</th>
+          {{ sort_th('claims_available', 'Claims', true) }}
+          {{ sort_th('evidence', 'Evidence', true) }}
+          {{ sort_th('changes', 'Changes', true) }}
+          {{ sort_th('last_checked', 'Last checked') }}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in results.items %}
+        <tr>
+          <td><input type="checkbox" name="org" value="{{ row.organisation_number }}" aria-label="Compare {{ row.display_name }}"></td>
+          <td><a href="/companies/{{ row.organisation_number }}">{{ row.display_name }}</a></td>
+          <td class="mono">{{ row.organisation_number }}</td>
+          <td>{{ ui.status_badge(row.terminal_status) }}</td>
+          <td>{% if row.industry_label %}{{ row.industry_label | truncate_text(48) }}{% if row.industry_code %} <span class="meta nowrap">{{ row.industry_code }}</span>{% endif %}{% else %}<span class="unknown">not recorded</span>{% endif %}</td>
+          <td>{% if row.city %}{{ row.city }}{% else %}<span class="unknown">not recorded</span>{% endif %}</td>
+          <td class="num">{% if row.employees.known %}{{ row.employees.value | integer }}{% else %}<span class="unknown" title="{{ row.employees.availability_help }}">{{ row.employees.availability_label | lower }}</span>{% endif %}</td>
+          <td class="num">{% if row.revenue.known %}<span class="nowrap">{{ row.revenue.value | amount(row.revenue.currency) }}</span><br><span class="meta nowrap">{{ row.revenue.reporting_period | period }}</span>{% else %}<span class="unknown" title="{{ row.revenue.availability_help }}">{{ row.revenue.availability_label | lower }}</span>{% endif %}</td>
+          <td>{% if row.website.known %}{{ ui.ext(row.website.value, row.website.value | url_host) }}{% else %}<span class="unknown" title="{{ row.website.availability_help }}">{{ row.website.availability_label | lower }}</span>{% endif %}</td>
+          <td class="num">{{ row.claims_available }}<span class="meta"> / {{ row.claims_total }}</span></td>
+          <td class="num">{{ row.evidence_count }}</td>
+          <td class="num">{% if row.changes_total %}<a href="/changes/{{ row.organisation_number }}">{{ row.changes_total }}</a>{% if row.changes_material %} <span class="badge material">{{ row.changes_material }} material</span>{% endif %}{% else %}<span class="unknown">none</span>{% endif %}</td>
+          <td class="nowrap">{% if row.last_checked %}{{ row.last_checked | timestamp }}{% else %}<span class="unknown">not recorded</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="actions">
+    <button type="submit">Compare selected</button>
+    <span class="meta">Select two or three researched companies.</span>
+  </div>
+</form>
+
+{{ ui.pager(results, query) }}
+
+<div class="actions">
+  <span class="meta">Download the {{ results.total }} filtered {{ 'company' if results.total == 1 else 'companies' }}:</span>
+  <a class="button secondary small" href="/download/companies.csv{{ query_string(query.to_params(page=1)) }}">Companies CSV</a>
+  <a class="button secondary small" href="/download/claims.csv{{ query_string(query.to_params(page=1)) }}">Claims CSV</a>
+  <a class="button secondary small" href="/download/evidence.csv{{ query_string(query.to_params(page=1)) }}">Evidence CSV</a>
+  <a class="button secondary small" href="/download/envelopes.jsonl{{ query_string(query.to_params(page=1)) }}">Envelopes JSONL</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{% block title %}{{ agent_name }}{% endblock %} &middot; {{ agent_name }}</title>
+<link rel="stylesheet" href="/static/app.css?v={{ version }}">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="masthead-top">
+      <a class="brand" href="/companies">Signal<span>post</span></a>
+      <span class="dataset-chip" title="{{ config.input_path }}">{{ dataset.label }} &middot; {{ dataset.count }} {{ 'company' if dataset.count == 1 else 'companies' }}</span>
+      {% if dataset.truncated %}<span class="badge partial" title="Started with a record limit">truncated by --max-records</span>{% endif %}
+      {% if not research_enabled %}<span class="dataset-chip">read-only</span>{% endif %}
+    </div>
+    <nav class="primary" aria-label="Sections">
+      <a href="/companies"{% if nav == 'companies' %} aria-current="page"{% endif %}>Companies</a>
+      <a href="/changes"{% if nav == 'changes' %} aria-current="page"{% endif %}>Changes</a>
+      <a href="/runs"{% if nav == 'runs' %} aria-current="page"{% endif %}>Runs &amp; evidence</a>
+      <a href="/research"{% if nav == 'research' %} aria-current="page"{% endif %}>Research</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="page" tabindex="-1">
+  {% if dataset.load_error %}
+  <div class="notice bad">
+    <p><strong>No data loaded.</strong> {{ dataset.load_error }}</p>
+    <p class="meta">Start the server with <span class="mono">--input &lt;path to a run's .jsonl&gt;</span> to point the interface at a different run.</p>
+  </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="site">
+  <div class="page">
+    <p>{{ agent_name }} {{ version }} &middot; read-only view of <span class="mono">{{ config.input_path }}</span>{% if dataset.loaded_at %} &middot; loaded {{ dataset.loaded_at | timestamp }}{% endif %}.
+    Every value shown comes from that file or from the measured run reports beside it. This is a proof of concept, not a production service.</p>
+  </div>
+</footer>
+
+<script src="/static/app.js?v={{ version }}" defer></script>
+</body>
+</html>

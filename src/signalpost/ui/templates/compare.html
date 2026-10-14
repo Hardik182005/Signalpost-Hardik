@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui %}
+{% block title %}Compare companies{% endblock %}
+
+{% block content %}
+<h1>Compare researched companies</h1>
+
+{% if not profiles %}
+<p class="lede">Pick two or three companies from the explorer and choose <em>Compare selected</em>, or enter their organisation numbers here. Only companies present in <span class="mono">{{ dataset.label }}</span> can be compared &mdash; this view never researches anything.</p>
+<form class="panel" method="get" action="/compare">
+  <div class="filters">
+    <div class="field"><label for="org1">First organisation number</label><input type="text" id="org1" name="org" maxlength="12" inputmode="numeric"></div>
+    <div class="field"><label for="org2">Second organisation number</label><input type="text" id="org2" name="org" maxlength="12" inputmode="numeric"></div>
+    <div class="field"><label for="org3">Third (optional)</label><input type="text" id="org3" name="org" maxlength="12" inputmode="numeric"></div>
+  </div>
+  <div class="actions"><button type="submit">Compare</button><a class="button secondary" href="/companies">Back to the explorer</a></div>
+</form>
+{% else %}
+<p class="lede">Comparing {{ profiles | length }} companies from <span class="mono">{{ dataset.label }}</span>. A cell reads <em>not recorded</em> when the run produced no claim for that field, which is not the same as a recorded zero or a recorded absence.</p>
+
+<div class="panel table-scroll">
+  <table class="compare">
+    <thead>
+      <tr>
+        <th scope="col">Run measurements</th>
+        {% for profile in profiles %}
+        <th scope="col"><a href="/companies/{{ profile.organisation_number }}">{{ profile.row.display_name }}</a><br><span class="mono meta">{{ profile.organisation_number }}</span></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr><th scope="row">Terminal status</th>{% for item in counts %}<td>{{ ui.status_badge(item.status) }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Available claims</th>{% for item in counts %}<td>{{ item.claims_available }} / {{ item.claims_total }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Evidence records</th>{% for item in counts %}<td>{{ item.evidence }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Snapshots</th>{% for item in counts %}<td>{{ item.snapshots }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Last checked</th>{% for item in counts %}<td class="nowrap">{% if item.last_checked %}{{ item.last_checked | timestamp }}{% else %}<span class="unknown">not recorded</span>{% endif %}</td>{% endfor %}</tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>Fields</h2>
+<div class="panel table-scroll">
+  <table class="compare">
+    <thead>
+      <tr>
+        <th scope="col">Field</th>
+        {% for profile in profiles %}<th scope="col">{{ profile.row.display_name | truncate_text(40) }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <th scope="row">{{ line.label }}</th>
+        {% for cell in line.cells %}
+        <td>
+          {% if cell.row is none %}
+          <span class="unknown" title="This run emitted no claim for this field.">not recorded</span>
+          {% elif cell.row.known %}
+          {% if cell.row.link %}{{ ui.ext(cell.row.link, cell.row.display) }}{% else %}{{ cell.row.display | truncate_text(220) }}{% endif %}
+          {% if cell.row.fact.reporting_period %}<br><span class="meta nowrap">{{ cell.row.fact.reporting_period | period }}</span>{% endif %}
+          {{ ui.evidence_list(cell.row.evidence, cell.row.unresolved) }}
+          {% else %}
+          {{ ui.state_badge(cell.row.fact.availability) }}
+          {% if cell.row.fact.reason %}<br><span class="meta">{{ cell.row.fact.reason | truncate_text(120) }}</span>{% endif %}
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="actions">
+  <a class="button secondary" href="/companies">Back to the explorer</a>
+  {% for profile in profiles %}<a class="button secondary small" href="/companies/{{ profile.organisation_number }}">{{ profile.organisation_number }} profile</a>{% endfor %}
+</div>
+{% endif %}
+{% endblock %}
