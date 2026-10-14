@@ -16,6 +16,7 @@ an honest result rather than a gap.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Iterable
@@ -27,7 +28,7 @@ from .extract import html as H
 from .fetch import Fetcher, Response
 from .identity import CompanyIdentity, IdentityResolver, IdentityVerdict
 from .models import Claim, Evidence, Locator, Snapshot, claim_key, stable_id
-from .net import canonical_url, registrable_domain
+from .net import canonical_url, registrable_domain, same_site
 
 # Crawl order: the pages most likely to carry scored facts come first, so a company
 # that runs out of budget still gets the highest-value pages.
@@ -129,6 +130,10 @@ class WebsiteResearcher:
 
         cited = {canonical_url(page.response.final_url) for page in visits}
         for page in result.corroboration:
+            # Legal notices corroborate ownership but may list external privacy
+            # officers, processors, and hosting contacts. Do not extract their contacts.
+            if page.kind == "legal":
+                continue
             if canonical_url(page.response.final_url) not in cited:
                 visits.append(page)
                 result.pages.append(canonical_url(page.response.final_url))
@@ -215,6 +220,9 @@ class WebsiteResearcher:
                 )
                 continue
 
+            # Registry authority applies to its listed domain, not an arbitrary
+            # cross-domain redirect (expired domains may redirect to a new owner).
+            from_registry = from_registry and same_site(url, response.final_url)
             verdict = resolver.assess_website(
                 response.final_url,
                 page_text=visit.text,
@@ -262,8 +270,13 @@ class WebsiteResearcher:
         planned: dict[str, str] = {}
         for url, anchor in H.links(landing.soup, base):
             kind = F.classify_link(url, anchor)
-            if registrable_domain(url) != home or kind not in CORROBORATION_KINDS:
+            if registrable_domain(url) != home:
                 continue
+            if kind not in CORROBORATION_KINDS:
+                if re.search(r"personvern|privacy|impressum|vilkår|vilkar|terms", f"{url} {anchor}", re.I):
+                    kind = "legal"
+                else:
+                    continue
             canonical = canonical_url(url)
             if canonical != canonical_url(base) and canonical not in planned:
                 planned[canonical] = kind
@@ -271,7 +284,9 @@ class WebsiteResearcher:
             return verdict
 
         pages: list[PageVisit] = []
-        for url, kind in list(planned.items())[:CORROBORATION_PAGES]:
+        ordinary = [(url, kind) for url, kind in planned.items() if kind != "legal"]
+        legal = [(url, kind) for url, kind in planned.items() if kind == "legal"]
+        for url, kind in [*ordinary[:CORROBORATION_PAGES], *legal[:1]]:
             if self.fetcher.budget.should_stop_discretionary():
                 break
             try:
@@ -294,6 +309,26 @@ class WebsiteResearcher:
         )
         if not combined.publishable:
             return combined if combined.conflicts else verdict
+        # Legal notices often enumerate overseas affiliates with identical names.
+        # Name-only corroboration from such a notice cannot establish the Norwegian
+        # entity. Require its number or a non-name discriminator already in the gate.
+        if any(page.kind == "legal" for page in pages):
+            decisive = any(signal.strength == "decisive" for signal in combined.signals)
+            independent = any(signal.name in {"phone", "email_domain", "street_address",
+                                              "postal_code", "official_listing"}
+                              for signal in combined.signals)
+            if not decisive and not independent:
+                ordinary = [landing, *(page for page in pages if page.kind != "legal")]
+                without_legal = resolver.assess_website(
+                    base, page_text="\n".join(page.text for page in ordinary), page_title=title,
+                    emails=[str(i.value) for page in ordinary for i in F.extract_emails(page.soup, page.text)],
+                    phones=[str(i.value) for page in ordinary for i in F.extract_phones(page.soup, page.text)],
+                    from_registry=from_registry,
+                )
+                if not without_legal.publishable:
+                    return without_legal
+                combined = without_legal
+                pages = [page for page in pages if page.kind != "legal"]
         combined.reason = (
             f"{combined.reason}; corroborated on "
             f"{', '.join(canonical_url(page.response.final_url) for page in pages)}"
@@ -617,7 +652,9 @@ class WebsiteResearcher:
         job_pages = [page for page in visits if page.kind in ("careers", "landing")]
         jobs_found = 0
         for page in job_pages:
-            for candidate in F.extract_jobs(page.soup, page.blocks, page.response.final_url, page.text):
+            for candidate in F.extract_jobs(
+                page.soup, page.blocks, page.response.final_url, page.text, careers_page=page.kind == "careers"
+            ):
                 if candidate.field == "hiring_signal":
                     if "hiring::signal" in seen:
                         continue
