@@ -50,6 +50,32 @@ def completed_numbers(path: Path) -> set[str]:
     }
 
 
+def prepare_output(path: Path, *, run_id: str, inputs: list[str], resume: bool) -> Path | None:
+    """Decide whether an existing output file may be resumed; set it aside if not.
+
+    Resuming is only right for an interrupted attempt at *this* run: the same run id,
+    and only companies this run was asked for. Anything else in the file — yesterday's
+    batch written to the same path, or a run over different companies — would be handed
+    back as this run's answer, stale and possibly for companies nobody asked about. Such
+    a file is renamed beside the output, never deleted, so it stays available as a
+    previous snapshot. Returns the path it was moved to, if it was moved.
+    """
+    if not path.exists() or path.stat().st_size == 0:
+        return None
+    wanted = set(inputs)
+    resumable = resume and all(
+        (envelope.get("run") or {}).get("run_id") == run_id
+        and str(envelope.get("organisation_number")) in wanted
+        for envelope in read_envelopes(path)
+    )
+    if resumable:
+        return None
+    stamp = utc_now().replace(":", "").replace("-", "")
+    target = path.with_name(f"{path.stem}.superseded-{stamp}{path.suffix}")
+    path.replace(target)
+    return target
+
+
 def load_previous(path: Path) -> dict[str, dict[str, Any]]:
     """Index a previous run's envelopes by organisation number, for refresh."""
     previous: dict[str, dict[str, Any]] = {}

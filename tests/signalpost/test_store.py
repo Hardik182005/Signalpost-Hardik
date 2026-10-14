@@ -201,3 +201,46 @@ class TestPreviousRunIndex:
         previous = load_previous(path)
         assert set(previous) == {"918432639", "986270027"}
         assert previous["918432639"]["run"]["terminal_status"] == "completed"
+
+
+class TestWhichOutputMayBeResumed:
+    """Only an interrupted attempt at the same run is resumed; any other file is set aside."""
+
+    def write(self, path: Path, *orgs: str) -> None:
+        with RunStore(path) as store:
+            for org in orgs:
+                store.write(envelope(org))
+
+    def test_an_interrupted_attempt_at_the_same_run_is_resumed(self, tmp_path: Path) -> None:
+        from signalpost.store import prepare_output
+
+        path = tmp_path / "run.jsonl"
+        self.write(path, "918432639")
+        assert prepare_output(path, run_id="t", inputs=["918432639", "979498047"], resume=True) is None
+        assert completed_numbers(path) == {"918432639"}
+
+    def test_yesterdays_output_at_the_same_path_is_not_returned_as_todays(self, tmp_path: Path) -> None:
+        """A daily run writing to a fixed path must not hand back the previous day's envelopes."""
+        from signalpost.store import prepare_output
+
+        path = tmp_path / "run.jsonl"
+        self.write(path, "918432639")
+        moved = prepare_output(path, run_id="today", inputs=["918432639"], resume=True)
+        assert moved is not None and moved.exists() and not path.exists()
+        assert completed_numbers(moved) == {"918432639"}
+
+    def test_a_file_holding_companies_outside_this_batch_is_set_aside(self, tmp_path: Path) -> None:
+        from signalpost.store import prepare_output
+
+        path = tmp_path / "run.jsonl"
+        self.write(path, "918432639", "979498047")
+        assert prepare_output(path, run_id="t", inputs=["918432639"], resume=True) is not None
+        assert not path.exists()
+
+    def test_no_resume_always_starts_fresh_without_deleting_anything(self, tmp_path: Path) -> None:
+        from signalpost.store import prepare_output
+
+        path = tmp_path / "run.jsonl"
+        self.write(path, "918432639")
+        moved = prepare_output(path, run_id="t", inputs=["918432639"], resume=False)
+        assert moved is not None and completed_numbers(moved) == {"918432639"}
