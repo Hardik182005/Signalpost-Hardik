@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Iterable
 
 from .identity import (
@@ -276,6 +276,14 @@ def propose(identity: CompanyIdentity) -> list[Candidate]:
             1.0,
         )
 
+    for listed in identity.listed_websites:
+        add(
+            listed,
+            "nav_employer_homepage",
+            "NAV job ads for this organisation number give this employer homepage",
+            0.90,
+        )
+
     for address in sorted(identity.emails):
         host = _mailbox_domain(address)
         if host:
@@ -295,6 +303,29 @@ def propose(identity: CompanyIdentity) -> list[Candidate]:
     if stems:
         top_stem, rationale, _ = stems[0]
         add(f"https://{top_stem}.com", "name_guess", f".com domain from the {rationale}", 0.30)
+
+    # Registry workplace URLs and historical/trading names are discovery hints only.
+    # They never become parent-company identity evidence: the existing gate must
+    # independently verify the current legal entity on the fetched site.
+    for listed in identity.discovery_websites[:5]:
+        add(listed, "registry_subunit", "Website listed for a registered workplace", 0.75)
+
+    # Some sites retain the legal suffix in their domain (e.g. exampleas.no).
+    tokens = name_tokens_for_domain(identity.legal_name, ascii_only=True)
+    if tokens and identity.legal_name.casefold().strip().endswith(" as"):
+        stem = "".join(tokens)
+        for suffix in ("as", "-as"):
+            if _valid_stem(stem + suffix):
+                add(f"https://{stem}{suffix}.no", "name_guess",
+                    "Company name with AS retained in the domain", 0.29)
+
+    aliases = list(dict.fromkeys([*identity.former_names[:3], *identity.subunit_names[:5]]))
+    for name in aliases:
+        if name_tokens_for_domain(name, ascii_only=True) == tokens:
+            continue
+        for stem, rationale, _ in domain_stems(replace(identity, legal_name=name))[:3]:
+            add(f"https://{stem}.no", "registered_name_guess",
+                f"Domain inferred from registered former/workplace name {name!r}: {rationale}", 0.28)
 
     candidates.sort(key=lambda item: -item.prior)
     return candidates
