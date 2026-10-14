@@ -1,0 +1,2 @@
+header: "organisasjonsnummer","navn","organisasjonsform.kode","organisasjonsform.beskrivelse","naeringskode1.kode","naeringskode1.beskrivelse","naeringskode2.kode","naeringskode2.beskrivelse","naeringskode3.kode","naeringskode3.beskrivelse","hjelpeenhetskode.kode","hjelpeenhetskode.beskrivelse","harRegistre
+data rows: 1468449

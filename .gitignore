@@ -1,0 +1,24 @@
+# Local environment and caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Credentials and local auth state - never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials.json
+token.json
+.cookies/
+.browser-profile/
+
+# Large downloads and run artifacts are reproducible, not source
+data/downloads/
+out/
+dist/
+.fetch/raw/
