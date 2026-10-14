@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -51,6 +53,42 @@ MIN_TIME_RESERVE_SECONDS = 20.0
 
 # Requests held back for the same reason.
 REQUEST_RESERVE_RATIO = 0.04
+
+# The locked envelope is 2,000 requests per 100 inputs. Builderr now supplies a shared
+# batch of 1,000 (possibly 1,100) companies, and a fixed 2,000-request default would
+# research the first ~250 and terminate the rest as `failed`. Unless the evaluator
+# states a cap, the request budget therefore scales with the batch at the same ratio.
+REQUESTS_PER_COMPANY = 20
+
+# Above this many inputs the run is wide enough that more concurrent companies are
+# needed to finish inside the wall clock; the per-host throttle keeps each site polite.
+LARGE_BATCH = 200
+LARGE_BATCH_CONCURRENCY = 24
+
+# The evaluator may supply its budget through the environment instead of flags.
+ENV_LIMITS = {
+    "max_requests": "SIGNALPOST_MAX_REQUESTS",
+    "max_seconds": "SIGNALPOST_MAX_SECONDS",
+    "max_spend_usd": "SIGNALPOST_MAX_SPEND_USD",
+    "concurrency": "SIGNALPOST_CONCURRENCY",
+}
+
+
+def resolve_limits(args: argparse.Namespace, inputs: int) -> dict[str, float]:
+    """Budget for this run: explicit flag, then environment, then a batch-scaled default."""
+    defaults = {
+        "max_requests": max(DEFAULT_MAX_REQUESTS, REQUESTS_PER_COMPANY * inputs),
+        "max_seconds": DEFAULT_MAX_SECONDS,
+        "max_spend_usd": DEFAULT_MAX_SPEND_USD,
+        "concurrency": LARGE_BATCH_CONCURRENCY if inputs > LARGE_BATCH else 8,
+    }
+    limits: dict[str, float] = {}
+    for name, default in defaults.items():
+        value = getattr(args, name, None)
+        if value is None and os.environ.get(ENV_LIMITS[name], "").strip():
+            value = float(os.environ[ENV_LIMITS[name]])
+        limits[name] = default if value is None else value
+    return limits
 
 
 @dataclass(slots=True)
@@ -240,6 +278,11 @@ class BatchRunner:
 
     def run(self, *, progress: bool = True) -> dict[str, Any]:
         config = self.config
+        moved = store_mod.prepare_output(
+            config.output, run_id=config.run_id, inputs=config.inputs, resume=config.resume
+        )
+        if moved is not None and progress:
+            print(f"existing output belongs to another run; kept as {moved}")
         store = store_mod.RunStore(config.output)
         pending = list(config.inputs)
         if config.resume:
@@ -250,6 +293,12 @@ class BatchRunner:
 
         started = time.monotonic()
         done = 0
+        if self.pipeline.nav_jobs is not None and pending:
+            # Bring the shared vacancy index up to date while the first companies are
+            # still in their registry stage, so no worker waits on it from cold.
+            threading.Thread(
+                target=self.pipeline.nav_jobs.index.ensure_ready, name="nav-index", daemon=True
+            ).start()
         try:
             with ThreadPoolExecutor(max_workers=config.concurrency) as pool:
                 queue = list(pending)
@@ -336,6 +385,9 @@ class BatchRunner:
                 "spend_usd": snapshot.spend_usd,
                 "max_spend_usd": snapshot.max_spend_usd,
                 "denials": snapshot.denials,
+                "nav_job_index": (
+                    dict(self.pipeline.nav_jobs.index.status) if self.pipeline.nav_jobs else None
+                ),
                 "by_purpose": snapshot.by_purpose,
                 "top_hosts": dict(
                     sorted(snapshot.by_host.items(), key=lambda item: -item[1])[:15]
@@ -390,10 +442,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-o", "--output", default="out/run.jsonl", help="Envelope output path")
     parser.add_argument("--run-id", default=None, help="Run identifier (default: timestamp)")
     parser.add_argument("--limit", type=int, default=None, help="Only take the first N inputs")
-    parser.add_argument("--concurrency", type=int, default=8)
-    parser.add_argument("--max-requests", type=int, default=DEFAULT_MAX_REQUESTS)
-    parser.add_argument("--max-seconds", type=float, default=DEFAULT_MAX_SECONDS)
-    parser.add_argument("--max-spend-usd", type=float, default=DEFAULT_MAX_SPEND_USD)
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=None,
+        help="Companies researched at once (default: 8, rising to 24 for large batches)",
+    )
+    parser.add_argument(
+        "--max-requests",
+        type=int,
+        default=None,
+        help=f"Outbound request cap (default: {REQUESTS_PER_COMPANY} per input, the locked 2,000-per-100 ratio)",
+    )
+    parser.add_argument("--max-seconds", type=float, default=None, help="Wall-clock cap (default: 2700)")
+    parser.add_argument("--max-spend-usd", type=float, default=None, help="Third-party spend cap (default: 10)")
     parser.add_argument("--max-pages", type=int, default=5, help="Pages per company website")
     parser.add_argument("--snapshots", default=None, help="Directory for raw response snapshots")
     parser.add_argument(
@@ -408,7 +470,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--no-financials", action="store_true")
     parser.add_argument("--no-structure", action="store_true")
-    parser.add_argument("--no-resume", action="store_true", help="Ignore existing output")
+    parser.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="Start fresh even if the output holds an interrupted attempt at this --run-id "
+        "(an output from any other run is always set aside, never resumed)",
+    )
     parser.add_argument("--offline", action="store_true", help="Make no network requests")
     parser.add_argument("--quiet", action="store_true")
     return parser
@@ -422,14 +489,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     run_id = args.run_id or f"run-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}"
+    limits = resolve_limits(args, len(inputs))
     config = RunConfig(
         inputs=inputs,
         output=Path(args.output),
         run_id=run_id,
-        concurrency=max(1, args.concurrency),
-        max_requests=args.max_requests,
-        max_seconds=args.max_seconds,
-        max_spend_usd=args.max_spend_usd,
+        concurrency=max(1, int(limits["concurrency"])),
+        max_requests=int(limits["max_requests"]),
+        max_seconds=float(limits["max_seconds"]),
+        max_spend_usd=float(limits["max_spend_usd"]),
         max_pages=args.max_pages,
         snapshot_root=Path(args.snapshots) if args.snapshots else None,
         previous=Path(args.previous_snapshot) if args.previous_snapshot else None,
