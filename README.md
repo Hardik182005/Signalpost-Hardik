@@ -1,8 +1,8 @@
 # Signalpost
 
 A research agent for Norwegian companies. Given a nine-digit organisation number, it assembles
-what can be established about that company from the official register and the company's own
-website, and writes one terminal JSONL envelope per input — every claim carrying the source,
+what can be established about that company from the official register, NAV's vacancy register
+and the company's own website, and writes one terminal JSONL envelope per input — every claim carrying the source,
 the retrieval time, a content hash and a locator that points at the exact span the value came
 from.
 
@@ -18,8 +18,12 @@ verification is claimed anywhere in this repository.
 
 - Resolves identity against the organisation number as the stable legal key, validating it by
   MOD-11 rather than by length.
-- Reads the Brønnøysund open-data APIs for legal identity, roles, annual accounts, group
-  structure and registered subunits.
+- Reads the Brønnøysund open-data APIs for legal identity, registered activity, roles, annual
+  accounts (several years where filed), group structure and registered subunits.
+- Reads NAV's open vacancy register, which names each ad's employer by organisation number,
+  and publishes a company's open vacancies only after re-reading each ad in the run and
+  confirming it is active and that the employer is the company or one of its registered
+  workplaces. See [`CRAWLERS.md`](CRAWLERS.md#nav-vacancies).
 - Proposes website candidates (registry-declared, mailbox domain, name variants including
   æ/ø/å as punycode), pre-filters them by DNS, and then **refuses to publish any of them**
   unless the identity gate is satisfied — one decisive signal, or two independent evidence
@@ -32,7 +36,11 @@ verification is claimed anywhere in this repository.
   verified websites in the superseded 1,000-company run; the cause is fixed in `1e06568`.
 - Detects change against a previous run's output using stable semantic claim keys, and
   separates material change from cosmetic churn. See [`REFRESH.md`](REFRESH.md).
-- Writes deterministic template summaries. **No language model is involved at any point.**
+- Writes a deterministic summary that answers, in order: what the company is and does, who
+  runs it, how big it is, how its latest filed numbers look (with margin and equity ratio
+  calculated from those figures), where to find it, whether it is hiring, what it has
+  published lately, what changed since the last run, and what could not be established.
+  Every sentence lists the claims it was built from. **No language model is involved.**
 - Enforces the evaluator's request, time and spend budgets by reservation before dispatch, so
   a limit is refused rather than overrun.
 
@@ -43,8 +51,7 @@ The measured per-family rates are in [`EVAL.md`](EVAL.md).
 
 ## Setup
 
-Python 3.12+ and [`uv`](https://docs.astral.sh/uv/). No account, no API key, no environment
-variable.
+Python 3.12+ and [`uv`](https://docs.astral.sh/uv/). No account and no API key.
 
 ```
 uv sync
@@ -55,23 +62,24 @@ The project is deliberately not installed as a package (`[tool.uv] package = fal
 `main.py` puts `src/` on `sys.path` and reconfigures stdout and stderr to UTF-8 (for Norwegian
 names on a Windows console); it has no other behaviour.
 
-**Credentials required: none.** There is no `.env`, no secret to supply, and nothing in
-`src/signalpost/` reads an environment variable. Verify it:
-
-```
-grep -rn "environ\|getenv\|openai\|anthropic" src/signalpost/
-```
-
-That returns nothing. See [`MODELS_AND_APIS.md`](MODELS_AND_APIS.md).
+**Credentials required: none.** The NAV vacancy feed is read with the public token NAV
+publishes for open use, fetched by the run itself. Every environment variable the run reads
+is optional; see [`MODELS_AND_APIS.md`](MODELS_AND_APIS.md#environment-variables).
 
 ## Running the agent
 
-The evaluator command, exactly as it was run to produce the measured results below:
+The evaluator command — Builderr's batch file in, one envelope per company out:
 
 ```
-uv run main.py --input data/corpus/corpus.jsonl --limit 100 \
-               --output out/eval100b.jsonl \
-               --run-id eval100b
+uv run python scripts/signalpost/run_batch.py --organisations <batch.jsonl|.json|.txt> \
+    --output out/envelopes.jsonl --run-id <id> --expected-count <N>
+```
+
+It accepts the starter's input forms, refuses a malformed batch before making any request,
+and passes every other option through to `main.py`. The direct form:
+
+```
+uv run main.py --input data/corpus/corpus.jsonl --output out/run.jsonl --run-id run-1
 ```
 
 Full option list (`uv run main.py --help`):
@@ -86,11 +94,18 @@ uv run main.py [-i INPUT] [-o OUTPUT] [--run-id ID] [--limit N]
                [organisation_numbers ...]
 ```
 
-Defaults match the locked evaluator envelope: `--max-requests 2000`, `--max-seconds 2700`,
-`--max-spend-usd 10.0`, `--concurrency 8`, `--max-pages 5`. Default output is `out/run.jsonl`.
+**Budgets scale with the batch.** Unless a flag or a `SIGNALPOST_*` variable sets them:
+20 outbound requests per input company (the locked 2,000-per-100 ratio), 2,700 s of wall
+clock, $10 of spend (actual: $0), and 8 companies in flight — 24 above 200 inputs. A
+1,000-company batch therefore runs with a 20,000-request cap, not 2,000.
+
+**Resuming.** A run resumes an existing output file only when that file is an interrupted
+attempt at the same `--run-id` over the same companies. Any other file at the output path —
+for example yesterday's batch — is renamed `<name>.superseded-<time>.jsonl` and kept, never
+returned as this run's answer.
 
 **There is no `--report` flag.** The run report path is derived from the output stem, so
-`--output out/eval100b.jsonl` writes `out/eval100b-report.json`.
+`--output out/envelopes.jsonl` writes `out/envelopes-report.json`.
 
 ### Inputs
 
@@ -144,41 +159,36 @@ comparison. `--cutoff DATE` fixes what "today" means for recency, so a replay is
 
 ## Measured results
 
-From `out/eval100b-report.json`, run 2026-09-13T15:12:36Z to 15:19:05Z:
+**Submission smoke test — 100 held-out companies** (`data/holdout/`, a stratified sample of the
+universe that shares no company with the development corpus), run 2026-10-13 with the
+evaluator command and default budgets. Report and envelopes:
+[`docs/evidence/smoke100-holdout/`](docs/evidence/smoke100-holdout/).
 
 | Measure | Value |
 | --- | --- |
-| Envelopes | 100 (22 `completed`, 77 `partial`, 1 `failed`) |
-| Claims available / emitted | 3,072 / 3,948 |
-| Evidence records | 3,073 |
-| Verified websites | 22 of 100 |
-| Outbound requests | 797 of the 2,000 cap |
-| Wall clock | 389.0 s of the 2,700 s cap |
-| Third-party spend | $0.00 of the $10.00 cap |
-| Exactly one envelope per input | true |
+| Envelopes | 100, exactly one per input (14 `completed`, 86 `partial`, 0 `failed`) |
+| Claims available / emitted | 4,761 / 5,754, each with evidence |
+| Verified websites | 14 of 100 |
+| Outbound requests | 770 of the 2,000 cap |
+| Wall clock | 135.5 s of the 2,700 s cap (median 5.7 s, p90 14.0 s per company) |
+| Third-party spend | $0.00 |
+| Refresh rerun against that output | 0 changes, 0 false changes (`refresh-report.json`) |
+| Integrity audit | every claim resolves to its evidence, no duplicate claim keys |
 
-These are **live operational metrics**. They say what the run did. They say nothing about
-whether the published facts are correct — no human accuracy review has been performed, so
-there is no precision figure, no recall figure and no wrong-company rate. That distinction is
-the subject of [`EVAL.md`](EVAL.md), which separates fixture checks, automated integrity
-checks, live operational metrics and independently reviewed research quality, and marks the
-last of the four **unavailable**.
+**Official batch size — the 1,000-company development corpus**, same code, default budgets
+(`out/dev/v3-1000-report.json`): 1,000 envelopes, exactly one per input, 0 `failed`;
+7,442 requests of a 20,000 cap; **532 s** wall clock at concurrency 24 (the same corpus took
+2,539 s before the registry pacing fix); 182 verified websites; 192 company-owned social
+profiles; 25 vacancies at 13 companies, 12 of them at 8 companies confirmed by NAV against the employer's
+organisation number. The integrity audit of that run found 14 duplicate claim keys — company
+and group accounts for one year sharing an `accounts_audited` key — fixed before the smoke
+test above, which audits clean.
 
-`eval100b` predates the two most recent pipeline commits (`23a7c21`, `1e06568`), and one of its
-22 verified websites (935654866) carries the evidence defect described below. There is no
-100-company run of the current code; see
-[`EVAL.md`](EVAL.md#which-code-produced-which-run).
-
-**The 1,000-company run.** A first run over the full frozen corpus completed on 2026-09-14
-(1,000 envelopes, exactly one per input, 0 `failed`, $0.00 under a $0 cap, 7,413 requests,
-2,545.3 s, on generation-run ceilings of 40,000 requests and 14,400 s rather than the evaluator's
-per-100 limits). **It has been superseded.** An offline integrity audit found that for 2 of its
-186 verified websites the identity evidence cited a snapshot that was not stored in the envelope;
-the cause was snapshot deduplication by URL, fixed in commit `1e06568`. Its files are archived
-under `out/superseded/` with the suffix `-23a7c21`. The corpus is being regenerated on the fixed
-commit; the regenerated totals will be in `out/submission-profiles-report.json` and are
-**pending** at the time of writing. Details and every superseded figure, labelled, are in
-[`EVAL.md`](EVAL.md#run-submission-1000--full-corpus).
+These are **live operational metrics**. They say what the run did, not whether every
+published fact is correct — no independent human accuracy review has been performed, so
+there is no measured precision or wrong-company rate. [`EVAL.md`](EVAL.md) separates fixture
+checks, automated integrity checks, live operational metrics and independently reviewed
+research quality, and marks the last **unavailable**.
 
 ## Tests
 
@@ -191,27 +201,24 @@ claim-key stability, evidence resolution, the identity gate's known failure patt
 behaviour under concurrency, URL safety, prompt-injection handling, refresh idempotency, and
 storage of every snapshot a website claim cites. The suite also holds tests for the web
 interface and the packager, and 104 tests (`tests/test_poc.py`) for the legacy
-`norway_company_agent` package, which is not in the submitted run path. On 2026-09-14 at
-`102a12a`: 437 passed, with the `ui` extra installed; without it the 46 UI tests are skipped.
-Per-file counts are in [`EVAL.md`](EVAL.md#1-automated-integrity-checks).
+`norway_company_agent` package, which is not in the submitted run path. On 2026-10-13:
+483 passed, with the `ui` extra installed.
 
 They prove the rules are enforced. They do not prove the rules are right.
 
 Two offline audits check a finished run's output rather than the code:
 
 ```
-uv run python scripts/signalpost/check_integrity.py out/submission-profiles.jsonl \
-    --snapshot-root out --expected data/corpus/organisation-numbers.txt \
-    --report out/integrity-report.json
-uv run python scripts/signalpost/check_idempotency.py out/submission-profiles.jsonl \
+uv run python scripts/signalpost/check_integrity.py out/envelopes.jsonl \
+    --expected <inputs.txt> --report out/integrity-report.json
+uv run python scripts/signalpost/check_idempotency.py out/envelopes.jsonl \
     --report out/idempotency-report.json
 ```
 
-The first follows every claim to its evidence and snapshot and re-hashes stored bodies; the
-second diffs each envelope's claims against themselves and counts false changes. On the
-superseded 1,000-company run they found the 2 evidence defects above, re-hashed 4,556 stored
-bodies without a mismatch, and replayed 40,291 claims with 0 false changes. Neither checks
-whether a claim is true. Results for the regenerated run are pending.
+The first follows every claim to its evidence (and, with `--snapshot-root`, re-hashes stored
+bodies); the second diffs each envelope's claims against themselves and counts false changes.
+Neither checks whether a claim is true. Results for the submission smoke test are in
+[`docs/evidence/smoke100-holdout/`](docs/evidence/smoke100-holdout/).
 
 ## Web interface
 
@@ -219,7 +226,7 @@ A read-only interface over a finished run's output:
 
 ```
 uv sync --extra ui
-uv run --extra ui serve.py --input out/submission-profiles.jsonl --port 8765
+uv run --extra ui serve.py --input out/smoke100/envelopes.jsonl --port 8765
 ```
 
 Pages: `/companies`, `/companies/{org}`, `/compare`, `/changes`, `/runs`, `/evidence`; CSV and
@@ -245,19 +252,19 @@ The short version; [`LIMITATIONS.md`](LIMITATIONS.md) is the long one and is the
 before trusting any number here.
 
 - **No accuracy measurement of any kind.** No independent review, no gold labels.
-- **22 of 100 companies got a verified website** in `eval100b` (186 of 1,000 in the superseded
-  1,000-company run). The external half of the coverage is weak, and `jobs` (2.0% of slots in
-  `eval100b`) is not working.
-- **The only external source in a run is the company's own website.** Nine connector scripts
-  under `scripts/` (Brave, LinkedIn, news, reviews, and others) are disabled and not in the
-  submitted run path.
-- **Registry timeouts are real.** In `eval100b`, which ran before the registry retry settings
-  were raised, one company terminated `failed` and 13 lost registry-backed claims. The superseded
-  1,000-company run, with the raised settings, had 0 `failed` — an observation over a different
-  sample, not a demonstrated fix.
-- **A detected evidence defect did not reach the run report.** The in-run validator recorded
-  the cited-snapshot defect inside the affected envelopes, but they stayed `completed` and the
-  report said `verification.ok: true`. The defect is fixed; that reporting gap is not.
+- **Website coverage is the weak half.** 14 of 100 held-out companies and 182 of 1,000 corpus
+  companies got a verified website. Most companies in the universe are small and have none;
+  of those that do, the ones whose domain is neither registered nor guessable from the name
+  are missed, because no search engine is used. Website-derived families (contact,
+  description, social profiles, activity) inherit that ceiling.
+- **External sources are the company's own website and NAV's vacancy register.** Nine
+  connector scripts under `scripts/` (Brave, LinkedIn, news, reviews, and others) are disabled
+  and not in the run path.
+- **NAV vacancies come from a declared cache** refreshed from the feed at run time; an ad posted
+  after the cache under a brand name is missed until the cache is rebuilt
+  (`scripts/signalpost/build_nav_job_index.py --refresh`).
+- **Registry timeouts are real.** A registry read that fails after its retries terminates the
+  company as `failed` with the reason stated.
 - **No JBOX integration.**
 - **No language model**, which means no hallucination and no cost, and also templated prose and
   no semantic understanding.

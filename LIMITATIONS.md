@@ -141,11 +141,18 @@ model runner.
 They are quarantined pending data-rights and held-out gates. The full table with per-connector
 reasons is in [`SOURCE_RIGHTS.md`](SOURCE_RIGHTS.md#disabled-connectors).
 
-The consequence is concrete: **the only external source in a run is the company's own
-website.** There is no news, no jobs aggregator, no reviews, no social listening, no
-third-party directory. `activity` and `jobs` claims come from the company's own pages or not
-at all, which is a large part of why those families are sparse. Anything scored as "external
-intelligence" beyond a company's own site is simply not implemented.
+The consequence is concrete: **the external sources in a run are the company's own website
+and NAV's vacancy register.** There is no news, no reviews, no social listening, no
+third-party directory. `activity` comes from the company's own pages or not at all. `jobs`
+comes from the company's careers page and from NAV, which names employers by organisation
+number; NAV holds a majority of publicly advertised Norwegian vacancies but not Finn.no's,
+so a company hiring only through Finn.no shows no vacancies here.
+
+NAV vacancies are found through a declared cache built at a fixed time
+(`data/nav/nav-job-index.json.gz`). Ads published after the cache are matched only by the
+display name NAV gives the employer, so an ad from a company whose ads use a brand name is
+missed until the cache is rebuilt. Every published vacancy is still re-read from NAV in the
+run itself.
 
 ## 6. No JBOX integration
 
@@ -155,8 +162,9 @@ does not satisfy it. Status: not started, not planned within this round.
 
 ## 7. No language model
 
-The submitted run path uses no LLM, no model provider and no API key (verified by
-`grep -rn "environ\|getenv\|openai\|anthropic" src/signalpost/`, which returns nothing).
+The submitted run path uses no LLM, no model provider and no personal API key (verified by
+`grep -rn "openai\|anthropic" src/signalpost/`, which returns nothing). The only token it
+uses is the public one NAV publishes for its vacancy feed.
 
 The upside is in [`COSTS.md`](COSTS.md): $0.00, fully reproducible, incapable of hallucinating.
 

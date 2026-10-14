@@ -8,8 +8,8 @@ project talks itself into believing it is more validated than it is, so they are
 | Category | What it proves | Status here |
 | --- | --- | --- |
 | **Fixture checks** | Behaviour against saved responses. No network. | Available — 1 artifact, with caveats |
-| **Automated integrity checks** | The code enforces its own rules, and a run's output is internally consistent. No network. | Available — the test suite (437 passed at `102a12a`; 104 of them exercise the legacy `norway_company_agent` package, not the submitted run path); two offline run audits (results on the superseded 1,000-company run only) |
-| **Live operational metrics** | What actually happened against real sources | Available — 3 completed runs (100, 100-refresh, and a 1,000-company run that has been **superseded**; its regeneration on commit `1e06568` is in progress and its values are pending) |
+| **Automated integrity checks** | The code enforces its own rules, and a run's output is internally consistent. No network. | Available — the test suite (483 passed on 2026-10-13; 104 of them exercise the legacy `norway_company_agent` package, not the submitted run path); two offline run audits, run on the submission smoke test |
+| **Live operational metrics** | What actually happened against real sources | Available — the runs of 2026-10-13 below, and the earlier runs further down, each labelled with the code that produced it |
 | **Independently reviewed research quality** | Whether the published facts are *correct* | **Unavailable.** No independent review has been performed. |
 
 The fourth row is the important one. **There is no accuracy measurement in this project.**
@@ -21,6 +21,37 @@ show the design works on the open web.
 **Official qualification status: `not_determined`.** No score, no recall figure, and no
 qualification claim appears in this repository. Nothing has been verified by the organiser or
 by any third party.
+
+## Follow-up audit of 2026-10-14
+
+See [the measured improvement audit](docs/evidence/codex-20261014/README.md) for the
+fresh baseline, revised run, precision rechecks, and controlled synthesis comparison.
+The final suite passes 506 tests. Six mixed-scope financial summaries, three understated
+workplace totals, and incomplete citations in 28 count-bearing sentences are corrected
+on the same saved 1,000-company claims (these checks overlap). No official score or
+independent recall measurement is inferred from this.
+
+## Runs of 2026-10-13 (prior working tree)
+
+Changes measured here, against the September runs below: request budgets that scale with the
+batch, registry pacing for the open-data API, NAV vacancies, stricter job and address
+extraction, the rewritten summary, and output resumption limited to the same run.
+
+| Run | Inputs | Envelopes | Requests | Wall clock | Websites | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `smoke100-holdout` | 100 held-out (`data/holdout/`) | 100, one per input | 770 / 2,000 | 135.5 s | 14 | Integrity audit clean; idempotency 0 false changes; refresh rerun 0 changes. [Evidence](docs/evidence/smoke100-holdout/) |
+| `v2-100` + refresh | first 100 of corpus | 100 + 100 | 765 | 204.5 s | 21 | Live refresh rerun: 0 changes |
+| `v3-1000` | 1,000 corpus | 1,000, one per input | 7,442 / 20,000 | 532.3 s | 182 | 14 duplicate `accounts_audited` keys found by the integrity audit, fixed after this run |
+
+The same 1,000 companies took 2,539 s in September, of which ~2,410 s was the 0.6 s throttle
+on the single registry host. NAV vacancy coverage on the corpus is small and exact: 8 of
+1,000 companies had an active NAV ad naming them or a registered workplace as employer, and
+all 8 got published vacancies, 12 ads in all.
+
+Job postings from company sites dropped from 34 to 13 between the September run and
+`v3-1000` because the listing extractor now reads only careers pages and rejects calls to
+action, staff listings and benefit lines; every one of the 34 September postings was reviewed
+and the large majority were not vacancies.
 
 ## Corpus and splits
 
