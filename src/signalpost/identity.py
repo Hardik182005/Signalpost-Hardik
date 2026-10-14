@@ -274,6 +274,11 @@ class CompanyIdentity:
     phones: set[str] = field(default_factory=set)
     emails: set[str] = field(default_factory=set)
     subunit_numbers: set[str] = field(default_factory=set)
+    subunit_names: list[str] = field(default_factory=list)
+    # Websites an official register lists for this exact organisation number other than
+    # Enhetsregisteret itself — today, the employer homepage on the company's NAV vacancies.
+    listed_websites: list[str] = field(default_factory=list)
+    discovery_websites: list[str] = field(default_factory=list)
 
     @property
     def all_names(self) -> list[str]:
@@ -310,9 +315,13 @@ class CompanyIdentity:
                 if value.get("street"):
                     identity.street_addresses.add(normalise_name(value["street"]))
             elif claim.field == "subunit" and isinstance(value, dict):
+                if value.get("website"):
+                    identity.discovery_websites.append(str(value["website"]))
                 number = value.get("organisation_number")
                 if number:
                     identity.subunit_numbers.add(str(number))
+                if value.get("name") and value["name"] not in identity.subunit_names:
+                    identity.subunit_names.append(str(value["name"]))
         identity.phones.discard("")
         return identity
 
@@ -353,6 +362,7 @@ class IdentityResolver:
         "linked_from_verified_site": "website_link",
         "handle_names_company": "name",
         "links_company_domain": "website_link",
+        "official_listing": "official_listing",
     }
 
     SUPPORTING_WEIGHTS = {
@@ -366,6 +376,7 @@ class IdentityResolver:
         "phone": 0.40,
         "email_domain": 0.35,
         "name_in_page_title": 0.25,
+        "official_listing": 0.60,
     }
 
     def __init__(self, identity: CompanyIdentity) -> None:
@@ -404,6 +415,24 @@ class IdentityResolver:
             )
             score += 1.0
 
+        listed = next(
+            (item for item in self.identity.listed_websites if same_site(url, item)), None
+        )
+        if listed is not None:
+            # NAV records this homepage against the company's own organisation number in
+            # its job ads. That ties the domain to the entity independently of the page,
+            # but the employer types it in, so it is one strong group, not proof.
+            weight = self.SUPPORTING_WEIGHTS["official_listing"]
+            signals.append(
+                IdentitySignal(
+                    "official_listing",
+                    SUPPORTING,
+                    f"NAV lists {domain} as the homepage of this organisation number's job ads",
+                    weight,
+                )
+            )
+            score += weight
+
         found_numbers = find_org_numbers(text)
         if self.identity.organisation_number in found_numbers:
             signals.append(
@@ -427,7 +456,14 @@ class IdentityResolver:
 
         lowered_text = text.casefold()
         normalised_text = normalise_name(text[:200_000])
-        registered_text = normalise_registered_name(f"{page_title}\n{text[:200_000]}")
+        raw_registered_text = f"{page_title}\n{text[:200_000]}"
+        registered_text = normalise_registered_name(raw_registered_text)
+        # English "Greystone as a result ..." is not the legal entity GREYSTONE AS.
+        # Preserve uppercase AS and the explicit A/S spelling as legal-form evidence;
+        # ordinary lowercase/title-case prose still contributes only a name match.
+        legal_as_text = normalise_registered_name(
+            re.sub(r"\b(?:as|As)\b", "legalformnotestablished", raw_registered_text)
+        )
         stem_only_match: str | None = None
         registered_match = False
         for name in self.identity.all_names:
@@ -436,7 +472,8 @@ class IdentityResolver:
                 continue
             form = legal_form(name)
             written = (f"{stem} {form}", f"{form} {stem}") if form else (stem,)
-            if any(_contains_phrase(registered_text, phrase) for phrase in written):
+            exact_text = legal_as_text if form == "as" else registered_text
+            if any(_contains_phrase(exact_text, phrase) for phrase in written):
                 key = "exact_legal_name" if name == self.identity.legal_name else "former_name"
                 weight = self.SUPPORTING_WEIGHTS[key]
                 signals.append(
