@@ -106,6 +106,10 @@ class Budget:
         self._denials: dict[str, int] = {}
         self._by_host: dict[str, int] = {}
         self._by_purpose: dict[str, int] = {}
+        # Usage booked by the current thread. A batch worker researches one company at
+        # a time on one thread, so this is how a company's own requests are told apart
+        # from those of the seven companies running beside it.
+        self._local = threading.local()
 
     # -- time -----------------------------------------------------------------
 
@@ -186,6 +190,7 @@ class Budget:
             self._used += count
             self._by_host[host] = self._by_host.get(host, 0) + count
             self._by_purpose[purpose] = self._by_purpose.get(purpose, 0) + count
+        self._local.requests = getattr(self._local, "requests", 0) + count
 
     def _release(self, count: int) -> None:
         with self._lock:
@@ -210,10 +215,15 @@ class Budget:
                     f" cap ${self.max_spend_usd:.2f}",
                 )
             self._spend += amount_usd
+        self._local.spend = getattr(self._local, "spend", 0.0) + amount_usd
 
     def can_afford(self, amount_usd: float) -> bool:
         with self._lock:
             return self._spend + amount_usd <= self.max_spend_usd + 1e-9
+
+    def thread_usage(self) -> tuple[int, float]:
+        """Requests and spend booked so far by the calling thread."""
+        return getattr(self._local, "requests", 0), getattr(self._local, "spend", 0.0)
 
     # -- reporting ------------------------------------------------------------
 

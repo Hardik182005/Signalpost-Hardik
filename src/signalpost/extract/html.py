@@ -31,15 +31,20 @@ NOISE_TAGS = ("script", "style", "noscript", "template", "svg", "iframe", "canva
 # not change behaviour; it is recorded so a human can see it happened.
 INJECTION_PATTERNS = (
     r"ignore (?:all |any )?(?:previous|prior|above) instructions",
-    r"disregard (?:all |any )?(?:previous|prior) (?:instructions|rules)",
+    r"disregard (?:all |any )?(?:previous|prior|your|the) (?:instructions|rules|prompt)",
+    r"forget (?:all |any )?(?:previous|prior|your) (?:instructions|rules)",
     r"you are (?:now |an? )?(?:AI|assistant|language model|chatbot)",
+    r"you are now (?:in |a )?\w+(?: \w+)? mode",
+    r"(?:enter|activate|switch to) (?:developer|debug|god|admin) mode",
     r"system prompt",
+    r"^\s*(?:system|assistant|developer)\s*:",
+    r"new instructions?\s*:",
     r"</?(?:system|assistant|user)>",
     r"do not (?:cite|verify|check) (?:this|the) (?:source|page)",
     r"publish (?:this|the following) as (?:fact|verified)",
     r"(?:reveal|print|output) (?:your |the )?(?:api[_ ]?key|secret|token|credentials)",
 )
-_INJECTION_RE = re.compile("|".join(INJECTION_PATTERNS), re.IGNORECASE)
+_INJECTION_RE = re.compile("|".join(INJECTION_PATTERNS), re.IGNORECASE | re.MULTILINE)
 
 
 @dataclass(slots=True)

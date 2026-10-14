@@ -32,6 +32,15 @@ SUBUNITS_URL = (
 GROUP_URL = "https://data.brreg.no/enhetsregisteret/api/konsernstruktur/{org}"
 ACCOUNTS_URL = "https://data.brreg.no/regnskapsregisteret/regnskap/{org}"
 
+# The registry is the spine of every profile: legal identity, accounts and roles all
+# come from it, so a lost registry answer costs far more coverage than a lost website
+# page. Measured in a live 100-company run with the fetcher defaults (2 attempts, 12 s):
+# 11 companies lost their accounts or roles to a timeout or a connection reset from
+# data.brreg.no, and a 12th lost its whole profile. Registry calls therefore get more
+# attempts and a longer timeout. Each attempt is still charged to the request budget.
+REGISTRY_ATTEMPTS = 4
+REGISTRY_TIMEOUT = 20.0
+
 # Role codes worth publishing as leadership. Excludes purely administrative markers.
 LEADERSHIP_ROLES = {
     "DAGL": "Chief executive / managing director",
@@ -102,6 +111,8 @@ class RegistryClient:
                 # BRREG publishes open data under NLOD and its robots file does not
                 # restrict the API, but we still check it like any other host.
                 respect_robots=True,
+                attempts=REGISTRY_ATTEMPTS,
+                timeout=REGISTRY_TIMEOUT,
             )
         except BudgetExceeded as exc:
             return None, Response(

@@ -17,6 +17,7 @@ is what closes the DNS-rebinding window between check and connect.
 from __future__ import annotations
 
 import ipaddress
+import re
 import socket
 from dataclasses import dataclass, field
 from typing import Iterable
@@ -100,6 +101,36 @@ TRACKING_KEYS = frozenset(
         "twclid",
         "_ga",
         "_gl",
+    }
+)
+
+# Cache-busters and session identifiers. These are a different problem from marketing
+# tags and are stripped for two reasons rather than one.
+#
+# `doing_wp_cron` is the reason this set exists: WordPress appends it, with a fresh
+# float timestamp, to a redirect it issues while triggering its own scheduled tasks. A
+# measured refresh run published a company website as
+# `https://mastermat.no/?doing_wp_cron=1789309421.0442390441894531250000` and then
+# reported a material `value_changed` event on the next fetch, because the number is
+# different every time. Nothing about the company had changed. That is precisely the
+# false change the refresh hard gate forbids, and it is also simply the wrong answer to
+# "what is this company's website".
+#
+# The session keys are stripped for a second reason: a session identifier captured from
+# a redirect must never be written into a published claim or a snapshot filename.
+VOLATILE_KEYS = frozenset(
+    {
+        "doing_wp_cron",
+        "cachebuster",
+        "cache_buster",
+        "nocache",
+        "phpsessid",
+        "jsessionid",
+        "aspsessionid",
+        "sessionid",
+        "session_id",
+        "cfid",
+        "cftoken",
     }
 )
 
@@ -230,7 +261,10 @@ def validate_url(url: str, *, resolve: bool = True) -> UrlVerdict:
 
     try:
         host = parts.hostname or ""
-        port = parts.port or (443 if scheme == "https" else 80)
+        # `or` would treat an explicit ":0" as "no port given" and silently rewrite it
+        # to the scheme default, so an invalid port has to be distinguished from None.
+        explicit = parts.port
+        port = explicit if explicit is not None else (443 if scheme == "https" else 80)
     except ValueError as exc:
         return UrlVerdict(url=raw, allowed=False, reason=f"invalid host or port ({exc})")
 
@@ -294,6 +328,11 @@ def redact_headers(headers: dict[str, str]) -> dict[str, str]:
     }
 
 
+_PATH_SESSION_RE = re.compile(
+    r";(?:jsessionid|cfid|cftoken|phpsessid)=[^/;?]*", re.IGNORECASE
+)
+
+
 def canonical_url(url: str) -> str:
     """Canonical form used inside stable claim keys and identity comparison.
 
@@ -314,9 +353,13 @@ def canonical_url(url: str) -> str:
         (key, value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)
         if key.lower() not in TRACKING_KEYS
+        and key.lower() not in VOLATILE_KEYS
         and not key.lower().startswith(TRACKING_PREFIXES)
     ]
     path = parts.path or "/"
+    # Java and ColdFusion servers put the session in a path parameter rather than the
+    # query string, so the filter above never sees it.
+    path = _PATH_SESSION_RE.sub("", path)
     if len(path) > 1 and path.endswith("/"):
         path = path.rstrip("/") or "/"
     return urlunsplit((scheme, netloc, path, urlencode(kept), ""))

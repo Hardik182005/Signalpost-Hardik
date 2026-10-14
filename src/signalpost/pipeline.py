@@ -202,8 +202,8 @@ class CompanyPipeline:
             except Exception as exc:  # noqa: BLE001
                 detail["stages"][name] = {"error": f"{type(exc).__name__}: {exc}"[:200]}
 
-        if response.snapshot:
-            snapshots.append(response.snapshot)
+        # The entity snapshot is already first in `snapshots`; appending it again listed
+        # the same retrieval twice in every envelope.
         return StageOutcome(
             name="registry",
             ok=True,
@@ -278,7 +278,7 @@ class CompanyPipeline:
             organisation_number=org, terminal_status="failed", started_at=started_at
         )
         stage_times: dict[str, float] = {}
-        requests_before = self.fetcher.budget.snapshot().requests_used
+        requests_before, spend_before = self.fetcher.budget.thread_usage()
 
         registry = self._stage("registry", org, lambda: self._registry_stage(org))
         stage_times["registry"] = registry.seconds
@@ -371,14 +371,23 @@ class CompanyPipeline:
         result.terminal_status = state
         result.completed_at = utc_now()
 
-        snapshot = self.fetcher.budget.snapshot()
+        requests_after, spend_after = self.fetcher.budget.thread_usage()
+        wall_seconds = time.monotonic() - started
+        own_requests = requests_after - requests_before
         result.operations.update(
             {
+                # The three names of the organiser's minimal output contract.
+                "requests": own_requests,
+                "runtime_ms": int(round(wall_seconds * 1000)),
+                "third_party_cost_usd": round(spend_after - spend_before, 6),
                 "pipeline_version": PIPELINE_VERSION,
                 "terminal_reason": reason,
                 "stage_seconds": stage_times,
-                "wall_seconds": round(time.monotonic() - started, 3),
-                "requests_used": snapshot.requests_used - requests_before,
+                "wall_seconds": round(wall_seconds, 3),
+                # This company's own requests. It used to be the change in the shared
+                # budget while the company ran, which also counted every request made
+                # by the companies running beside it.
+                "requests_used": own_requests,
                 "validation_problems": len(problems),
                 "claims_total": len(result.claims),
                 "claims_available": sum(
@@ -423,7 +432,13 @@ def failed_envelope(org: str, run_id: str, message: str) -> dict[str, Any]:
                 "recoverable": False,
             }
         ],
-        operations={"pipeline_version": PIPELINE_VERSION, "terminal_reason": message[:200]},
+        operations={
+            "requests": 0,
+            "runtime_ms": 0,
+            "third_party_cost_usd": 0.0,
+            "pipeline_version": PIPELINE_VERSION,
+            "terminal_reason": message[:200],
+        },
     )
     return build_envelope(
         result,

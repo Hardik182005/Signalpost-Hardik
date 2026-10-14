@@ -54,6 +54,13 @@ DEFAULT_HOST_DELAY = 0.6
 
 RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
 
+# Failures whose answer will not change on a second attempt. A closed port stays closed
+# and a certificate stays invalid, so a retry is a request spent for no information.
+# `network` is deliberately absent: it covers resets, DNS hiccups and — on Windows — an
+# ephemeral source port landing in an administered exclusion range, all of which are
+# genuinely worth one more try.
+TERMINAL_ERROR_KINDS = frozenset({"refused", "tls", "unsupported_media"})
+
 # Content we can actually extract from. Anything else is recorded and skipped rather
 # than downloaded in full.
 TEXTUAL_TYPES = (
@@ -304,8 +311,15 @@ class Fetcher:
         source_class: str = "permitted_public",
         allow_non_textual: bool = False,
         use_cache: bool = True,
+        attempts: int | None = None,
+        timeout: float | None = None,
     ) -> Response:
-        """Retrieve one URL, following validated redirects."""
+        """Retrieve one URL, following validated redirects.
+
+        `attempts` and `timeout` override the fetcher defaults for one call. They exist
+        for the registry, whose answers the whole profile depends on: every attempt is
+        still a request charged to the same budget.
+        """
         started = time.monotonic()
         cache_key = f"{purpose}\x1f{url}"
         if use_cache:
@@ -340,6 +354,8 @@ class Fetcher:
                 accept=accept,
                 limit=limit,
                 allow_non_textual=allow_non_textual,
+                attempts=attempts,
+                timeout=timeout,
             )
             if response.error and response.status == 0:
                 response.url = url
@@ -396,9 +412,12 @@ class Fetcher:
         accept: str,
         limit: int,
         allow_non_textual: bool,
+        attempts: int | None = None,
+        timeout: float | None = None,
     ) -> Response:
         last: Response | None = None
-        for attempt in range(self.max_attempts):
+        max_attempts = max(1, attempts or self.max_attempts)
+        for attempt in range(max_attempts):
             if self.budget.time_exhausted():
                 return self._failure(url, "wall-clock budget exhausted", "budget")
             try:
@@ -407,7 +426,12 @@ class Fetcher:
                 with self.budget.reserve_request(host=verdict.host, purpose=purpose):
                     self._throttle.wait(verdict.host, self._robots.crawl_delay(url))
                     response = self._perform(
-                        url, verdict, accept=accept, limit=limit, allow_non_textual=allow_non_textual
+                        url,
+                        verdict,
+                        accept=accept,
+                        limit=limit,
+                        allow_non_textual=allow_non_textual,
+                        timeout=timeout,
                     )
             except BudgetExceeded as exc:
                 return self._failure(url, str(exc), "budget")
@@ -415,8 +439,10 @@ class Fetcher:
             self._record(url, verdict.host, purpose, response)
             if response.status and response.status not in RETRYABLE_STATUS:
                 return response
+            if response.error_kind in TERMINAL_ERROR_KINDS:
+                return response
             last = response
-            if attempt + 1 < self.max_attempts:
+            if attempt + 1 < max_attempts:
                 backoff = 0.5 * (2**attempt)
                 retry_after = response.headers.get("retry-after", "")
                 if retry_after.isdigit():
@@ -432,7 +458,9 @@ class Fetcher:
         accept: str,
         limit: int,
         allow_non_textual: bool,
+        timeout: float | None = None,
     ) -> Response:
+        timeout = timeout or self.timeout
         parts = urlsplit(url)
         path = parts.path or "/"
         if parts.query:
@@ -445,12 +473,12 @@ class Fetcher:
                 verdict.host,
                 verdict.port,
                 pinned_ip=pinned,
-                timeout=self.timeout,
+                timeout=timeout,
                 context=self._ssl_context,
             )
         else:
             connection = _PinnedHTTPConnection(
-                verdict.host, verdict.port, pinned_ip=pinned, timeout=self.timeout
+                verdict.host, verdict.port, pinned_ip=pinned, timeout=timeout
             )
 
         headers = {
@@ -523,6 +551,12 @@ class Fetcher:
             return self._failure(url, "request timed out", "timeout")
         except ssl.SSLError as exc:
             return self._failure(url, f"TLS error: {type(exc).__name__}", "tls")
+        except ConnectionRefusedError as exc:
+            # Separated from the general network case because it is a *settled* answer:
+            # the port is closed and will still be closed in half a second. Retrying it
+            # spends a request from the locked 2,000 to learn nothing. The caller may
+            # still try a different port on the same host, which is a new question.
+            return self._failure(url, f"{type(exc).__name__}: {exc}", "refused")
         except (http.client.HTTPException, OSError) as exc:
             return self._failure(url, f"{type(exc).__name__}: {exc}", "network")
         finally:

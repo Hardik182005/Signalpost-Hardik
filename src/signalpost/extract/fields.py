@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Iterable
-from urllib.parse import urlsplit
+import unicodedata
+from urllib.parse import quote, unquote, urlsplit
 
 from bs4 import BeautifulSoup, Tag
 
@@ -310,6 +311,78 @@ def extract_addresses(text: str) -> list[Candidate]:
     return list(found.values())[:6]
 
 
+# Path segments that are features of a platform, never an account. Measured: a site
+# linked `facebook.com/search/top?q=vinterbro+ishall`, which is a search results page and
+# was published as the company's Facebook profile.
+_NON_PROFILE_SEGMENTS = {
+    "facebook": {"search", "sharer", "sharer.php", "share", "share.php", "dialog", "plugins",
+                 "hashtag", "watch", "events", "photo", "photo.php", "story.php",
+                 "permalink.php", "profile.php", "groups", "login", "help", "policies", "tr"},
+    "instagram": {"p", "reel", "reels", "tv", "explore", "stories", "accounts", "direct"},
+    "x": {"intent", "share", "home", "search", "hashtag", "i", "login"},
+    "tiktok": {"tag", "discover", "music", "video"},
+    "pinterest": {"pin", "search", "ideas"},
+    "github": {"orgs", "features", "topics", "search", "login"},
+    "vimeo": {"channels", "groups", "categories", "search"},
+    "snapchat": {"spotlight", "discover"},
+}
+
+
+def social_handle(url: str) -> tuple[str, str] | None:
+    """The account a social URL names, as (profile URL, handle), or None if it names none.
+
+    The profile URL is rebuilt from the handle alone, so query strings and admin
+    suffixes never reach a published value. Measured: a site linked its LinkedIn page as
+    `linkedin.com/company/gl%C3%B8r-iks/mycompany?viewAsMember=true`, which is the
+    administrator view of the page, not its public address.
+
+    A URL without a readable handle, such as `youtube.com/channel/UCBjqhuwKj3MfE3B6Hg2oA8Q`,
+    is refused rather than guessed at: nothing in it can be checked against the company.
+    """
+    domain = registrable_domain(url)
+    platform = SOCIAL_HOSTS.get(domain)
+    if not platform:
+        return None
+    parts = urlsplit(url)
+    segments = [unquote(item) for item in parts.path.split("/") if item]
+    if not segments:
+        return None
+    first = segments[0].casefold()
+    prefix: list[str] = []
+    if platform == "linkedin":
+        if first not in ("company", "school", "showcase") or len(segments) < 2:
+            return None
+        prefix, handle = [first], segments[1]
+    elif platform == "youtube":
+        if first.startswith("@"):
+            handle = segments[0]
+        elif first in ("c", "user") and len(segments) >= 2:
+            prefix, handle = [first], segments[1]
+        else:
+            return None
+    elif platform == "facebook" and first in ("pages", "p") and len(segments) >= 2:
+        prefix, handle = [first], segments[1]
+    else:
+        if first in _NON_PROFILE_SEGMENTS.get(platform, ()):
+            return None
+        handle = segments[0]
+    if not handle.strip("@_.-"):
+        return None
+    path = "/".join([*prefix, quote(handle, safe="@._-")])
+    profile = canonical_url(f"https://{parts.hostname}/{path}")
+    return profile, handle
+
+
+def handle_text(handle: str) -> str:
+    """A handle reduced to comparable letters: `gullbring_trening` becomes `gullbringtrening`."""
+    from ..identity import TRANSLITERATE
+
+    text = unquote(handle).casefold().translate(TRANSLITERATE)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]", "", text)
+
+
 def extract_social_profiles(soup: BeautifulSoup, base_url: str) -> list[Candidate]:
     """Owned social profiles linked from the page.
 
@@ -325,24 +398,17 @@ def extract_social_profiles(soup: BeautifulSoup, base_url: str) -> list[Candidat
         platform = SOCIAL_HOSTS.get(domain)
         if not platform:
             continue
-        parts = urlsplit(url)
-        path = parts.path.strip("/")
-        if not path or parts.query.startswith(("u=", "url=", "text=")):
+        if urlsplit(url).query.startswith(("u=", "url=", "text=")):
             continue
-        if platform == "linkedin" and not path.startswith(("company/", "school/", "showcase/")):
+        account = social_handle(url)
+        if account is None:
             continue
-        if platform == "facebook" and path.startswith(("sharer", "share", "dialog", "plugins")):
-            continue
-        if platform == "x" and path.startswith(("intent", "share", "home")):
-            continue
-        if platform == "youtube" and not path.startswith(("channel/", "c/", "user/", "@")):
-            continue
-        canonical = canonical_url(url)
+        canonical, handle = account
         if canonical in found:
             continue
         found[canonical] = Candidate(
             "social_profile",
-            {"platform": platform, "url": canonical},
+            {"platform": platform, "url": canonical, "handle": handle},
             "css_selector",
             H.css_path(anchor),
             excerpt=f"{platform}: {canonical}",
@@ -696,7 +762,7 @@ def extract_activity(
     An undated item is not activity evidence, because recency is the whole point, so
     items without a usable date are dropped rather than published without one.
     """
-    horizon = today or datetime.utcnow().date()
+    horizon = today or datetime.now(timezone.utc).date()
     found: dict[str, Candidate] = {}
 
     for block in H.of_type(blocks, "NewsArticle", "Article", "BlogPosting", "Event", "PressRelease"):

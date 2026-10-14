@@ -33,8 +33,21 @@ from .net import canonical_url, registrable_domain
 # that runs out of budget still gets the highest-value pages.
 CRAWL_PRIORITY = ("contact", "about", "careers", "news", "team", "services")
 
+# Transport failures that say something about the port rather than about the site, and
+# so justify asking the same host once on :80. A timeout or a reset is excluded: those
+# are answers about the site, and retrying them on another port spends request budget
+# on a question already answered.
+_DOWNGRADE_ERROR_KINDS = frozenset({"refused", "tls"})
+
+
 DEFAULT_MAX_PAGES = 5
 DEFAULT_MAX_CANDIDATES = 4
+
+# Pages read to corroborate a landing page the identity gate found ambiguous, and the
+# kinds of page worth reading for it: the places a Norwegian company puts its
+# organisation number, address and phone.
+CORROBORATION_PAGES = 2
+CORROBORATION_KINDS = ("contact", "about")
 
 # Statuses that mean "we were refused", not "there is nothing here". A registry-listed
 # site answering with one of these is evidence the site exists and that we could not
@@ -74,6 +87,7 @@ class WebsiteResult:
     notes: list[str] = field(default_factory=list)
     discovery: DiscoveryResult | None = None
     access_refused: list[dict[str, Any]] = field(default_factory=list)
+    corroboration: list[PageVisit] = field(default_factory=list)
 
 
 class WebsiteResearcher:
@@ -113,9 +127,14 @@ class WebsiteResearcher:
             visits.append(page)
             result.pages.append(canonical_url(page.response.final_url))
 
+        cited = {canonical_url(page.response.final_url) for page in visits}
+        for page in result.corroboration:
+            if canonical_url(page.response.final_url) not in cited:
+                visits.append(page)
+                result.pages.append(canonical_url(page.response.final_url))
+
+        result.snapshots.extend(self._cited_snapshots(visits, result.corroboration))
         for page in visits:
-            if page.response.snapshot:
-                result.snapshots.append(page.response.snapshot)
             if page.injection_hits:
                 result.injection_reports.append(
                     {
@@ -127,6 +146,25 @@ class WebsiteResearcher:
 
         self._emit_claims(org, identity, visits, result)
         return result
+
+    @staticmethod
+    def _cited_snapshots(visits: list[PageVisit], corroboration: list[PageVisit]) -> list[Snapshot]:
+        """Every snapshot a website claim can cite, once each.
+
+        Deduplicated by snapshot id, not by URL. The website claim cites each
+        corroborating page, and the crawl can fetch the same URL again; on a page that
+        renders differently per request the two fetches are different snapshots, and
+        dropping the corroboration copy left its evidence pointing at nothing. Measured
+        on 2 of 186 verified websites in the 1,000-company run before this fix.
+        """
+        seen: set[str] = set()
+        snapshots: list[Snapshot] = []
+        for page in [*visits, *corroboration]:
+            snapshot = page.response.snapshot
+            if snapshot is not None and snapshot.id not in seen:
+                seen.add(snapshot.id)
+                snapshots.append(snapshot)
+        return snapshots
 
     # -- verification ---------------------------------------------------------
 
@@ -141,9 +179,7 @@ class WebsiteResearcher:
         for candidate in result.discovery.candidates:
             url, from_registry = candidate.url, candidate.from_registry
             try:
-                response = self.fetcher.get(
-                    url, purpose="website_landing", source_class="company_owned"
-                )
+                response, url = self._fetch_landing(url, result)
             except BudgetExceeded as exc:
                 result.notes.append(f"website verification stopped: {exc}")
                 break
@@ -187,6 +223,8 @@ class WebsiteResearcher:
                 phones=[str(item.value) for item in F.extract_phones(visit.soup, visit.text)],
                 from_registry=from_registry,
             )
+            if verdict.decision == "ambiguous" and not verdict.conflicts:
+                verdict = self._corroborate(visit, str(title), verdict, resolver, from_registry, result)
             if verdict.publishable:
                 return visit, verdict
             result.rejected.append({**verdict.to_dict(), "source": candidate.source})
@@ -197,6 +235,107 @@ class WebsiteResearcher:
             result.verdict = best[1]
             result.notes.append("no candidate site met the publication threshold")
         return None
+
+    def _corroborate(
+        self,
+        landing: PageVisit,
+        title: str,
+        verdict: IdentityVerdict,
+        resolver: IdentityResolver,
+        from_registry: bool,
+        result: WebsiteResult,
+    ) -> IdentityVerdict:
+        """Read the site's contact and about pages before giving up on an ambiguous landing.
+
+        A landing page is often just a name and a picture; the organisation number,
+        address and phone are one click away. When the identity gate finds a landing
+        page ambiguous, reading at most two same-site contact or about pages and putting
+        the combined evidence to the *same* gate recovers sites without lowering what
+        publication requires. A conflict (another organisation number, another legal
+        form) is never corroborated away: those verdicts do not reach this method.
+
+        The pages are cached by the fetcher, so the crawl that follows a publication
+        does not pay for them twice.
+        """
+        base = landing.response.final_url
+        home = registrable_domain(base)
+        planned: dict[str, str] = {}
+        for url, anchor in H.links(landing.soup, base):
+            kind = F.classify_link(url, anchor)
+            if registrable_domain(url) != home or kind not in CORROBORATION_KINDS:
+                continue
+            canonical = canonical_url(url)
+            if canonical != canonical_url(base) and canonical not in planned:
+                planned[canonical] = kind
+        if not planned:
+            return verdict
+
+        pages: list[PageVisit] = []
+        for url, kind in list(planned.items())[:CORROBORATION_PAGES]:
+            if self.fetcher.budget.should_stop_discretionary():
+                break
+            try:
+                response = self.fetcher.get(url, purpose="website_corroboration", source_class="company_owned")
+            except BudgetExceeded:
+                break
+            if response.ok and response.text and registrable_domain(response.final_url) == home:
+                pages.append(self._page(response, kind))
+        if not pages:
+            return verdict
+
+        visits = [landing, *pages]
+        combined = resolver.assess_website(
+            base,
+            page_text="\n".join(page.text for page in visits),
+            page_title=title,
+            emails=[str(i.value) for page in visits for i in F.extract_emails(page.soup, page.text)],
+            phones=[str(i.value) for page in visits for i in F.extract_phones(page.soup, page.text)],
+            from_registry=from_registry,
+        )
+        if not combined.publishable:
+            return combined if combined.conflicts else verdict
+        combined.reason = (
+            f"{combined.reason}; corroborated on "
+            f"{', '.join(canonical_url(page.response.final_url) for page in pages)}"
+        )
+        result.corroboration = pages
+        return combined
+
+    def _fetch_landing(self, url: str, result: WebsiteResult) -> tuple[Response, str]:
+        """Fetch a candidate landing page, downgrading to `http://` once if needed.
+
+        Discovery proposes every candidate as `https://`, which is right as a default and
+        wrong as an assumption. A live check of the hosts that failed in a measured
+        100-company run found three Norwegian company sites — `bergenproperty.no`,
+        `oceancleaning.no`, `sofiesgullogur.no` — that refuse :443 outright and answer
+        HTTP 200 on :80. Three real websites in eight failures is not a rounding error in
+        a competition scored on recall.
+
+        So a *settled* transport failure on :443 is treated as a question about the port,
+        not about the company, and the same host is asked once on :80. A timeout, a 404
+        or a reset is not retried this way: those are answers about the site itself.
+
+        Two things this deliberately does not do. It does not widen what may be
+        published: the returned page still goes to the identity gate unchanged, and the
+        gate has no idea which scheme was used. And it does not hide the downgrade — the
+        published website value will read `http://…`, which is the truth about how that
+        company publishes itself.
+        """
+        response = self.fetcher.get(url, purpose="website_landing", source_class="company_owned")
+        if response.ok or not url.lower().startswith("https://"):
+            return response, url
+        if response.error_kind not in _DOWNGRADE_ERROR_KINDS:
+            return response, url
+
+        fallback = "http://" + url[len("https://") :]
+        retry = self.fetcher.get(fallback, purpose="website_landing", source_class="company_owned")
+        if not retry.ok:
+            return response, url
+        result.notes.append(
+            f"{canonical_url(url)} refused TLS ({response.error_kind}); "
+            f"the site answers over plain HTTP and is recorded as such"
+        )
+        return retry, fallback
 
     # -- crawling -------------------------------------------------------------
 
@@ -297,8 +436,27 @@ class WebsiteResearcher:
                 method="identity_gate",
             ),
         )
+        site_evidence_ids: list[str] = []
         if site_evidence:
             result.evidence.append(site_evidence)
+            site_evidence_ids.append(site_evidence.id)
+        # A site published on corroborating pages cites them too: the verdict rests on
+        # what those pages say, and a reviewer must be able to reach it.
+        for page in result.corroboration:
+            item = self._evidence_for(
+                page,
+                F.Candidate(
+                    "website",
+                    result.verified_url,
+                    "css_selector",
+                    "html",
+                    excerpt=canonical_url(page.response.final_url),
+                    method="identity_gate",
+                ),
+            )
+            if item and item.id not in site_evidence_ids:
+                result.evidence.append(item)
+                site_evidence_ids.append(item.id)
         result.claims.append(
             Claim(
                 claim_key=claim_key(org, "website"),
@@ -307,7 +465,7 @@ class WebsiteResearcher:
                 value=result.verified_url,
                 availability="available",
                 organisation_number=org,
-                evidence_ids=[site_evidence.id] if site_evidence else [],
+                evidence_ids=site_evidence_ids,
                 confidence=verdict.confidence,
                 identity_ref=verdict.reason,
                 extraction_method="identity_gate",
@@ -421,13 +579,28 @@ class WebsiteResearcher:
                 )
             )
 
-        # Owned social profiles. These are published because the company links them
-        # from its own verified site, which is an ownership assertion by the company.
+        # Social profiles linked from the verified site. The link alone is not ownership:
+        # sites link their theme vendor, their parent group and their partners too, so
+        # each account also goes through the identity gate. See `assess_profile`.
+        resolver = IdentityResolver(identity)
+        site_domain = registrable_domain(result.verified_url or "")
         for page in visits:
             for candidate in F.extract_social_profiles(page.soup, page.response.final_url):
                 platform = candidate.value["platform"]
                 key = f"social::{platform}"
+                handle = str(candidate.value.pop("handle", "") or "")
                 if key in seen:
+                    continue
+                profile = resolver.assess_profile(
+                    candidate.value["url"],
+                    linked_from_site=True,
+                    handle=handle,
+                    website_domain=site_domain,
+                )
+                if not profile.publishable:
+                    result.notes.append(
+                        f"{platform} link {candidate.value['url']} not published: {profile.reason}"
+                    )
                     continue
                 seen.add(key)
                 publish(
@@ -436,7 +609,8 @@ class WebsiteResearcher:
                     field_name="social_profile",
                     family="web_presence",
                     discriminators=(platform,),
-                    identity_ref="linked from verified company website",
+                    confidence=profile.confidence,
+                    identity_ref=profile.reason,
                 )
 
         # Hiring.

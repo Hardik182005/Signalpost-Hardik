@@ -1,0 +1,107 @@
+{
+  "schema_version": "signalpost.provenance/1",
+  "generated_at": "2026-09-13T14:23:00Z",
+  "note": "Checksums of the competition material this entry was built against. The bytes themselves are not redistributed: they are the organiser's material and docs/SOURCE_RIGHTS.md records why. The checksums let a reviewer confirm that what we read matches what they published.",
+  "artifacts": [
+    {
+      "file": "challenge-page.html",
+      "source_url": "https://builderr.ai/challenges/signalpost",
+      "source_class": "competition_material",
+      "media_type": "text/html",
+      "bytes": 70477,
+      "sha256": "7545b1bc32efceff00f2d7468adf03a831e8472d7f9efd483a5ff8c7f02d3133",
+      "retrieved_at": "2026-09-13T12:57:40Z",
+      "purpose": "Challenge page: prizes, round dates, submission address and the mailto field list."
+    },
+    {
+      "file": "challenge-text.txt",
+      "source_url": null,
+      "source_class": "derived",
+      "media_type": "text/plain",
+      "bytes": 10127,
+      "sha256": "8d1a60d0654f824f465af7bb86dd16898e8df2986e0b80732a45f0cee31630d8",
+      "retrieved_at": "2026-09-13T12:58:16Z",
+      "purpose": "Readable text extraction of challenge-page.html. Derived locally, not fetched."
+    },
+    {
+      "file": "brief.md",
+      "source_url": "https://builderr.ai/starter-briefs/signalpost.md",
+      "source_class": "competition_material",
+      "media_type": "text/markdown",
+      "bytes": 10060,
+      "sha256": "64f69e140ea77de98869a810eed0496a4329d180e7e4e10d75bb8a3384fb3010",
+      "retrieved_at": "2026-09-13T12:57:40Z",
+      "purpose": "Participant brief: what to build, the 1,000-profile floor, round window."
+    },
+    {
+      "file": "eval-harness.md",
+      "source_url": "https://builderr.ai/docs/signalpost-evaluation-harness.md",
+      "source_class": "competition_material",
+      "media_type": "text/markdown",
+      "bytes": 6422,
+      "sha256": "013507056a4501a8ebdaa56ffc8a0d2b9d8b1c1efa36e303d14227dbb3461ed0",
+      "retrieved_at": "2026-09-13T12:57:40Z",
+      "purpose": "Evaluation contract: scoring v2 weights, hard gates, locked run envelope."
+    },
+    {
+      "file": "sources.md",
+      "source_url": "https://builderr.ai/starter-briefs/signalpost-sources.md",
+      "source_class": "competition_material",
+      "media_type": "text/markdown",
+      "bytes": 2567,
+      "sha256": "f080470ab29d5c6da243d812e35d0ae0aa3d35f5871d62dfef90422df1b8f630",
+      "retrieved_at": "2026-09-13T12:57:40Z",
+      "purpose": "Source policy: preferred sources, licensing and attribution requirements."
+    },
+    {
+      "file": "agent-playbook.md",
+      "source_url": "https://builderr.ai/starter-briefs/signalpost-agent-playbook.md",
+      "source_class": "competition_material",
+      "media_type": "text/markdown",
+      "bytes": 5153,
+      "sha256": "7edbb705af9b20469ef78a60644734e3895c1b6b444253f149645056421bb7b8",
+      "retrieved_at": "2026-09-13T12:57:42Z",
+      "purpose": "Reference architecture. Explicitly advisory, not mandated."
+    },
+    {
+      "file": "learning-harness.md",
+      "source_url": "https://builderr.ai/starter-briefs/signalpost-learning-harness.md",
+      "source_class": "competition_material",
+      "media_type": "text/markdown",
+      "bytes": 6102,
+      "sha256": "3a3915e312010cb6ab6cf613135aa52acad6245b0db0d1dda3374dc27c2fed9a",
+      "retrieved_at": "2026-09-13T12:57:42Z",
+      "purpose": "Suggested experiment loop for measured improvement."
+    },
+    {
+      "file": "guidelines.html",
+      "source_url": "https://builderr.ai/guidelines",
+      "source_class": "competition_material",
+      "media_type": "text/html",
+      "bytes": 61032,
+      "sha256": "8e977d57a76a33a4086f362d31c7b7ba6d1f262d1c4bacd2b8ee3d123d714d63",
+      "retrieved_at": "2026-09-13T12:57:42Z",
+      "purpose": "Platform guidelines: conduct, eligibility and prohibited practices."
+    },
+    {
+      "file": "start.html",
+      "source_url": "https://builderr.ai/start",
+      "source_class": "competition_material",
+      "media_type": "text/html",
+      "bytes": 44705,
+      "sha256": "b4567a518a821c50c8c3e1ded3b6f0bb6e967ab6b0094c934e9f40e74d70ff24",
+      "retrieved_at": "2026-09-13T12:57:42Z",
+      "purpose": "Platform entry page listing open challenges."
+    },
+    {
+      "file": "product.html",
+      "source_url": "https://builderr.ai/signalpost",
+      "source_class": "competition_material",
+      "media_type": "text/html",
+      "bytes": 1761011,
+      "sha256": "813b603186dc9a12a734bcec4909e6ada17ad3c858477abd3e042de4374bbd2f",
+      "retrieved_at": "2026-09-13T12:57:42Z",
+      "purpose": "Signalpost product page: the user-facing description of what the agent is for."
+    }
+  ]
+}

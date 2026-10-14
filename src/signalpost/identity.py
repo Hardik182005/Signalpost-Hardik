@@ -117,6 +117,45 @@ def normalise_name(value: str) -> str:
     return " ".join(tokens)
 
 
+def normalise_registered_name(value: str) -> str:
+    """Like `normalise_name`, but the legal form is kept.
+
+    The form is what separates GLØR AS from GLØR IKS. Brønnøysund keeps the full
+    registered names of companies distinct, so a page that writes the whole name
+    including its form is naming one legal entity; a page that writes only the stem may
+    be naming any entity that shares it.
+    """
+    text = str(value or "").casefold().translate(TRANSLITERATE)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = AS_SLASH_RE.sub(" as ", text)
+    text = re.sub(r"[^\w\s]", " ", text)
+    return " ".join(token for token in text.split() if token)
+
+
+def legal_form(value: str) -> str | None:
+    """The registered legal form of a name, from its last or (for "AS …") first token."""
+    tokens = normalise_registered_name(value).split()
+    if len(tokens) > 1 and tokens[-1] in LEGAL_SUFFIXES:
+        return tokens[-1]
+    if len(tokens) > 1 and tokens[0] in LEADING_LEGAL_FORMS:
+        return tokens[0]
+    return None
+
+
+# Forms that, written straight after a company's name, identify a *different* legal
+# entity from the one registered under another form. "da", "sa", "ba", "if", "ks" and
+# "avd" are left out on purpose: they are ordinary Norwegian words ("sa" is "said", "da"
+# is "then"), and "Frekhaug sa" in a quotation is not a statement about legal form.
+CONFLICTING_FORMS = frozenset(
+    {"as", "asa", "ans", "nuf", "enk", "kf", "fkf", "iks", "sf", "bbl", "brl", "stiftelse"}
+)
+
+
+def _contains_phrase(haystack: str, needle: str) -> bool:
+    return bool(needle) and f" {needle} " in f" {haystack} "
+
+
 def name_tokens(value: str) -> set[str]:
     return {token for token in normalise_name(value).split() if len(token) > 2}
 
@@ -135,6 +174,12 @@ def valid_org_number(value: str) -> bool:
     """
     digits = re.sub(r"\D", "", str(value or ""))
     if len(digits) != 9:
+        return False
+    # Brønnøysund allocates upward from 800000000: all 411,160 companies in the
+    # official eligible universe start with 8 or 9. Without this, "000000000" passes
+    # the check digit by arithmetic accident, and a nine-zero run in a table would
+    # register as a decisive identity signal.
+    if digits[0] not in ("8", "9"):
         return False
     weights = (3, 2, 7, 6, 5, 4, 3, 2)
     total = sum(int(digit) * weight for digit, weight in zip(digits[:8], weights))
@@ -279,7 +324,39 @@ class IdentityResolver:
     PUBLISH_THRESHOLD = 1.0
     AMBIGUOUS_THRESHOLD = 0.45
 
+    # Supporting signals are counted by *group*, not by name, when deciding whether
+    # there are two independent pieces of evidence.
+    #
+    # The reason is a measured wrong-company publication. GLØR AS, a 26-employee
+    # company in Mo i Rana, was published with the website glor.no on "3 independent
+    # supporting signals": the name in the page text, the name in the title, the name in
+    # the domain. That is one fact counted three times. The site belongs to GLØR IKS, an
+    # inter-municipal company, and its phone number, two emails and business
+    # description were published under the wrong organisation number with it. A
+    # published entry scoring 69.57 was held out of qualification for one link like it.
+    #
+    # So however many ways a page repeats the company's name, the name is one group, and
+    # publication needs a second group that is not the name.
+    SIGNAL_GROUPS = {
+        "name_in_text": "name",
+        "name_in_page_title": "name",
+        "distinctive_name_in_domain": "name",
+        "name_tokens_match": "name",
+        "exact_legal_name": "registered_name",
+        "former_name": "registered_name",
+        "postal_code": "location",
+        "street_address": "location",
+        "city": "location",
+        "phone": "contact",
+        "email_domain": "contact",
+        "profile_links_website": "website_link",
+        "linked_from_verified_site": "website_link",
+        "handle_names_company": "name",
+        "links_company_domain": "website_link",
+    }
+
     SUPPORTING_WEIGHTS = {
+        "name_in_text": 0.25,
         "exact_legal_name": 0.45,
         "former_name": 0.35,
         "distinctive_name_in_domain": 0.40,
@@ -350,19 +427,43 @@ class IdentityResolver:
 
         lowered_text = text.casefold()
         normalised_text = normalise_name(text[:200_000])
+        registered_text = normalise_registered_name(f"{page_title}\n{text[:200_000]}")
+        stem_only_match: str | None = None
+        registered_match = False
         for name in self.identity.all_names:
-            normalised = normalise_name(name)
-            if not normalised:
+            stem = normalise_name(name)
+            if not stem:
                 continue
-            if normalised and normalised in normalised_text:
-                is_current = name == self.identity.legal_name
-                key = "exact_legal_name" if is_current else "former_name"
+            form = legal_form(name)
+            written = (f"{stem} {form}", f"{form} {stem}") if form else (stem,)
+            if any(_contains_phrase(registered_text, phrase) for phrase in written):
+                key = "exact_legal_name" if name == self.identity.legal_name else "former_name"
                 weight = self.SUPPORTING_WEIGHTS[key]
                 signals.append(
-                    IdentitySignal(key, SUPPORTING, f"Page text contains {name!r}", weight)
+                    IdentitySignal(key, SUPPORTING, f"Page names the registered entity {name!r}", weight)
                 )
                 score += weight
+                registered_match = True
                 break
+            if stem_only_match is None and _contains_phrase(registered_text, stem):
+                stem_only_match = stem
+        if not registered_match and stem_only_match is not None:
+            # The name without its legal form is a claim about a *name*, which several
+            # entities can share, and it is scored as one.
+            weight = self.SUPPORTING_WEIGHTS["name_in_text"]
+            signals.append(
+                IdentitySignal(
+                    "name_in_text",
+                    SUPPORTING,
+                    f"Page contains the name {stem_only_match!r} without its legal form",
+                    weight,
+                )
+            )
+            score += weight
+
+        other_form = self._conflicting_legal_form(registered_text)
+        if other_form:
+            conflicts.append(other_form)
 
         if page_title and self._distinctive:
             title_tokens = distinctive_tokens(page_title)
@@ -409,6 +510,14 @@ class IdentityResolver:
                 score += weight
                 break
 
+        for city in sorted(self.identity.cities):
+            needle = normalise_name(city)
+            if len(needle) >= 4 and _contains_phrase(normalised_text, needle):
+                weight = self.SUPPORTING_WEIGHTS["city"]
+                signals.append(IdentitySignal("city", SUPPORTING, f"Page mentions {city!r}", weight))
+                score += weight
+                break
+
         page_phones = {normalise_phone(item) for item in phones}
         page_phones |= {normalise_phone(item) for item in re.findall(r"\+?[\d][\d\s.()-]{6,}", text[:50_000])}
         if self.identity.phones & {phone for phone in page_phones if len(phone) >= 8}:
@@ -418,17 +527,25 @@ class IdentityResolver:
             )
             score += weight
 
-        for address in emails:
-            host = str(address).split("@")[-1].strip().lower()
-            if host and domain and registrable_domain(host) == domain:
-                weight = self.SUPPORTING_WEIGHTS["email_domain"]
-                signals.append(
-                    IdentitySignal(
-                        "email_domain", SUPPORTING, f"Contact email is on {domain}", weight
-                    )
+        # Only the *registered* email counts. A page listing an address on its own domain
+        # is true of nearly every website and says nothing about whose website it is,
+        # yet it used to score as a supporting signal on every such page.
+        registered = {str(item).strip().casefold() for item in self.identity.emails}
+        on_page = {str(item).strip().casefold() for item in emails}
+        registered_hosts = {item.split("@")[-1] for item in registered if "@" in item}
+        if registered & on_page or (
+            domain and any(registrable_domain(host) == domain for host in registered_hosts)
+        ):
+            weight = self.SUPPORTING_WEIGHTS["email_domain"]
+            signals.append(
+                IdentitySignal(
+                    "email_domain",
+                    SUPPORTING,
+                    f"The registered contact email is on {domain} or listed on the page",
+                    weight,
                 )
-                score += weight
-                break
+            )
+            score += weight
 
         if not lowered_text.strip():
             conflicts.append("no readable page text to verify identity")
@@ -442,29 +559,74 @@ class IdentityResolver:
         url: str,
         *,
         linked_from_site: bool = False,
+        handle: str = "",
         profile_name: str = "",
         profile_text: str = "",
         website_domain: str | None = None,
     ) -> IdentityVerdict:
         """Decide whether an owned profile (social, directory) belongs to the company.
 
-        A profile linked from the company's own verified website is decisive: the
-        company itself asserted ownership.
+        A link from the company's verified website is strong evidence but not proof, and
+        it used to be treated as proof. Measured on 100 real companies, links from
+        verified sites published `facebook.com/AxiomThemes` (the vendor of the site's
+        WordPress theme, left in its footer), `x.com/VTSvest` (another organisation), a
+        recycling campaign page, and an opaque YouTube channel id. Websites link to theme
+        vendors, parent groups, partners and campaigns as readily as to their own
+        accounts. So the link counts as one evidence group, and the account handle has
+        to name the company or its website as the second.
         """
         signals: list[IdentitySignal] = []
         conflicts: list[str] = []
         score = 0.0
 
         if linked_from_site:
+            weight = 0.60
             signals.append(
                 IdentitySignal(
                     "linked_from_verified_site",
-                    DECISIVE,
+                    SUPPORTING,
                     "Linked from the company's verified website",
-                    1.0,
+                    weight,
                 )
             )
-            score += 1.0
+            score += weight
+
+        if handle:
+            from .extract.fields import handle_text
+
+            compact = handle_text(handle)
+            names = sorted(
+                {token for token in distinctive_tokens(self.identity.legal_name) if len(token) >= 4}
+            )
+            stem = ""
+            if website_domain:
+                stem = re.sub(r"[^a-z0-9]", "", website_domain.split(".")[0].casefold())
+            matched = next((token for token in names if token in compact), None)
+            if matched is None and len(stem) >= 4 and stem in compact:
+                matched = stem
+            if matched:
+                weight = 0.45
+                signals.append(
+                    IdentitySignal(
+                        "handle_names_company",
+                        SUPPORTING,
+                        f"Account handle {handle!r} contains {matched!r}",
+                        weight,
+                    )
+                )
+                score += weight
+            handle_words = normalise_registered_name(re.sub(r"[_.]", " ", handle)).split()
+            own_form = legal_form(self.identity.legal_name)
+            other_forms = {
+                word for word in handle_words[1:] if word in CONFLICTING_FORMS and word != own_form
+            }
+            if own_form == "asa":
+                other_forms.discard("as")
+            if own_form and other_forms:
+                conflicts.append(
+                    f"account names a different legal entity: {handle!r} is "
+                    f"{', '.join(sorted(other_forms)).upper()}, not the registered {own_form.upper()}"
+                )
 
         combined = f"{profile_name}\n{profile_text}"
         if self.identity.organisation_number in find_org_numbers(combined):
@@ -577,6 +739,30 @@ class IdentityResolver:
 
     # -- internals ------------------------------------------------------------
 
+    def _conflicting_legal_form(self, registered_text: str) -> str | None:
+        """A conflict when the page names this company's stem only under another form."""
+        form = legal_form(self.identity.legal_name)
+        stem = normalise_name(self.identity.legal_name)
+        if not form or not stem or not self._distinctive:
+            return None
+        if _contains_phrase(registered_text, f"{stem} {form}") or _contains_phrase(
+            registered_text, f"{form} {stem}"
+        ):
+            return None
+        written = {
+            other
+            for other in CONFLICTING_FORMS
+            if other != form
+            and not (form == "asa" and other == "as")
+            and _contains_phrase(registered_text, f"{stem} {other}")
+        }
+        if not written:
+            return None
+        return (
+            f"page names a different legal entity: {stem!r} as "
+            f"{', '.join(sorted(written)).upper()}, not the registered {form.upper()}"
+        )
+
     def _registry_url(self) -> str:
         raw = (self.identity.registry_website or "").strip()
         if raw and "://" not in raw:
@@ -592,8 +778,14 @@ class IdentityResolver:
     ) -> IdentityVerdict:
         decisive = [item for item in signals if item.strength == DECISIVE]
         supporting = {item.name for item in signals if item.strength == SUPPORTING}
+        groups = {self.SIGNAL_GROUPS.get(name, name) for name in supporting}
 
-        if conflicts and any("other organisation number" in item or "different organisation" in item for item in conflicts):
+        if conflicts and any(
+            "other organisation number" in item
+            or "different organisation" in item
+            or "different legal entity" in item
+            for item in conflicts
+        ):
             # The source self-identifies as another entity: never publish.
             return IdentityVerdict(
                 candidate=candidate,
@@ -614,14 +806,17 @@ class IdentityResolver:
                 reason=f"decisive signal: {decisive[0].name}",
             )
 
-        if len(supporting) >= 2 and score >= self.PUBLISH_THRESHOLD:
+        if len(groups) >= 2 and score >= self.PUBLISH_THRESHOLD:
             return IdentityVerdict(
                 candidate=candidate,
                 decision="published",
                 confidence=min(0.95, 0.55 + score / 4),
                 signals=signals,
                 conflicts=conflicts,
-                reason=f"{len(supporting)} independent supporting signals ({score:.2f})",
+                reason=(
+                    f"{len(groups)} independent evidence groups "
+                    f"({', '.join(sorted(groups))}; score {score:.2f})"
+                ),
             )
 
         if score >= self.AMBIGUOUS_THRESHOLD:
