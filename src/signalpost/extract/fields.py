@@ -14,9 +14,11 @@ Norwegian specifics handled here:
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Any, Iterable
 import unicodedata
 from urllib.parse import quote, unquote, urlsplit
@@ -29,6 +31,25 @@ from . import html as H
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 NO_PHONE_RE = re.compile(r"(?:\+47[\s.-]?|0047[\s.-]?)?(?:\d[\s.-]?){7}\d")
 POSTAL_RE = re.compile(r"\b(\d{4})\s+([A-ZÆØÅ][A-ZÆØÅa-zæøå\- ]{2,30})\b")
+
+# Postcode -> post town, derived from the Brønnøysund bulk register (every business and
+# postal address it holds). The regex alone published "0181 Oslo Norge Maksimer AS" and
+# "6016 Powered by Salgsbetingelser" as addresses in the 1,000-company run: whatever
+# capitalised words followed four digits became a "city". An address is now published
+# only when the words after the code are that code's own post town.
+_POSTAL_TABLE_PATH = Path(__file__).resolve().parents[1] / "data_postal_codes.json"
+_POSTAL_TOWNS: dict[str, str] | None = None
+
+
+def postal_town(code: str) -> str | None:
+    """The registered post town for a Norwegian postcode, or None if the code is unknown."""
+    global _POSTAL_TOWNS
+    if _POSTAL_TOWNS is None:
+        try:
+            _POSTAL_TOWNS = json.loads(_POSTAL_TABLE_PATH.read_text(encoding="utf-8"))["postal_codes"]
+        except (OSError, ValueError, KeyError):
+            _POSTAL_TOWNS = {}
+    return _POSTAL_TOWNS.get(code)
 
 # Addresses that are shared infrastructure rather than a company contact.
 GENERIC_EMAIL_HOSTS = frozenset(
@@ -268,6 +289,13 @@ _COMPANY_TAIL_RE = re.compile(
 _COPYRIGHT_RE = re.compile(r"(?:©|&copy;|copyright|all rights reserved)", re.IGNORECASE)
 
 
+def _phrase_starts_with(text: str, town: str) -> bool:
+    """True when `text` begins with the words of `town`, ignoring case."""
+    words = text.casefold().replace("-", " ").split()
+    wanted = town.casefold().replace("-", " ").split()
+    return bool(wanted) and words[: len(wanted)] == wanted
+
+
 def extract_addresses(text: str) -> list[Candidate]:
     """Norwegian postal code + city pairs appearing in page text.
 
@@ -300,9 +328,12 @@ def extract_addresses(text: str) -> list[Candidate]:
                 continue
         if len(city) < 3 or any(ch.isdigit() for ch in city):
             continue
+        town = postal_town(code)
+        if town is None or not _phrase_starts_with(city, town):
+            continue
         found[code] = Candidate(
             "postal_address",
-            {"postal_code": code, "city": city},
+            {"postal_code": code, "city": town},
             "text_span",
             H.text_span(body, match.group(0)),
             excerpt=match.group(0)[:120],
@@ -609,9 +640,20 @@ def extract_description(
 
 
 def extract_jobs(
-    soup: BeautifulSoup, blocks: Iterable[dict[str, Any]], base_url: str, text: str
+    soup: BeautifulSoup,
+    blocks: Iterable[dict[str, Any]],
+    base_url: str,
+    text: str,
+    *,
+    careers_page: bool = True,
 ) -> list[Candidate]:
-    """Open positions, from JobPosting structured data or a careers listing."""
+    """Open positions, from JobPosting structured data or a careers listing.
+
+    Structured `JobPosting` data is read on any page. Listing headings and the bare
+    hiring signal are read only on a careers page: on a landing page a "Ledige
+    stillinger" menu link and a staff carousel both read as vacancies, and in the
+    1,000-company run they made up most of the published postings.
+    """
     found: dict[str, Candidate] = {}
 
     for block in H.of_type(blocks, "JobPosting"):
@@ -651,7 +693,7 @@ def extract_jobs(
 
     # The listing fallback is only trustworthy where a careers context exists. On a
     # landing page it reads product navigation as vacancies, so it is gated.
-    careers_context = bool(_CAREERS_CONTEXT_RE.search(text or ""))
+    careers_context = careers_page and bool(_CAREERS_CONTEXT_RE.search(text or ""))
     if not found and careers_context:
         # Fall back to listing markup: headings and links inside a careers page.
         for node in soup.find_all(["h1", "h2", "h3", "h4", "a", "li"], limit=400):
@@ -684,9 +726,16 @@ def extract_jobs(
             if len(found) >= 25:
                 break
 
-    hiring_words = ("ledige stillinger", "vi søker", "vi ansetter", "bli med i teamet", "open positions", "we are hiring", "join our team", "career opportunities")
+    # Statements that the company is recruiting now. "Ledige stillinger" and "open
+    # positions" are not among them: on a careers page they are the section heading,
+    # present whether or not anything is open.
+    hiring_words = ("vi søker", "vi ansetter", "we are hiring", "we're hiring")
     lowered = text.casefold()
-    if not found and any(word in lowered for word in hiring_words):
+    negated = any(
+        phrase in lowered
+        for phrase in ("ingen ledige stillinger", "ingen ledige", "ingen stillinger", "no open positions", "no vacancies", "no current openings")
+    )
+    if not found and careers_page and not negated and any(word in lowered for word in hiring_words):
         phrase = next(word for word in hiring_words if word in lowered)
         found["__hiring__"] = Candidate(
             "hiring_signal",
@@ -712,6 +761,11 @@ _ROLE_WORDS = (
     "stillinger", "developer", "engineer", "manager", "director", "specialist",
     "consultant", "analyst", "advisor", "coordinator", "officer", "architect",
     "technician", "intern", "internship", "apprentice", "lærling",
+    "tømrer", "tømrere", "rørlegger", "rørleggere", "maler", "frisør", "helsefagarbeider",
+    "helsefagarbeidar", "sjukepleiar", "vernepleier", "vernepleiar", "rådgjevar",
+    "assistent", "regnskapsfører", "økonom", "saksbehandler", "servitør", "mekaniker",
+    "operatør", "renholder", "lagermedarbeider", "butikkmedarbeider", "fagarbeider",
+    "bilmekaniker", "anleggsleder", "driftsleder", "daglig leder", "nurse", "accountant",
 )
 _ROLE_RE = re.compile(
     r"(?<![\wÀ-ɏ])(?:" + "|".join(_ROLE_WORDS) + r")(?![\wÀ-ɏ])",
@@ -738,6 +792,44 @@ _SECTION_HEADINGS = frozenset(
 )
 
 
+# Calls to action, benefit lines and marketing copy that carry a role word. Every entry
+# here was published as a vacancy in the 1,000-company run: "Se ledige stillinger",
+# "Abonner på ledige stillinger", "Ingen ledige stillinger", "Fast månedslønn i 100%
+# stilling + provisjon på salg", "Landets ledende rådgiver innen næringseiendom".
+_NOT_A_JOB_PHRASES = (
+    "ledige stillinger", "ledig stilling", "abonner", "ingen ", "se ", "bli ", "søk her",
+    "åpen søknad", "open application", "lønn", "provisjon", "landets", "norges ",
+    "ledende", "vi er ", "we are ", "coverage", "consensus", "interview", "->", "»",
+)
+
+# "Kevin Strandenes Chief Software Architect": a staff listing, not a vacancy. A label
+# opening with two capitalised words that are not title vocabulary opens with a name.
+_TITLE_VOCABULARY = frozenset(
+    {
+        "senior", "junior", "chief", "lead", "head", "software", "sales", "project",
+        "product", "key", "account", "business", "service", "customer", "technical",
+        "data", "it", "hr", "marketing", "finance", "financial", "regional", "assistant",
+        "general", "field", "quality", "operations", "site", "store", "office", "team",
+        "digital", "frontend", "backend", "fullstack", "full", "cloud", "principal",
+        "staff", "graduate", "trainee", "deputy", "vice", "executive", "commercial",
+        "daglig", "teknisk", "faglig", "avdelings", "assisterende", "kundeservice",
+        "erfaren", "ny", "nye", "ledig", "fast", "vikar", "sommerjobb", "student",
+    }
+)
+_LEADING_WORDS_RE = re.compile(r"^([A-ZÆØÅ][a-zæøåé]+)[ ]+([A-ZÆØÅ][a-zæøåé]+)\b")
+_PHONE_IN_LABEL_RE = re.compile(r"(?:\+47|\b\d{2}\s?\d{2}\s?\d{2}\s?\d{2}\b)")
+
+
+def _opens_with_person_name(label: str) -> bool:
+    match = _LEADING_WORDS_RE.match(label.strip())
+    if not match:
+        return False
+    first, second = match.group(1).casefold(), match.group(2).casefold()
+    if first in _TITLE_VOCABULARY or second in _TITLE_VOCABULARY:
+        return False
+    return not (_ROLE_RE.fullmatch(first) or _ROLE_RE.fullmatch(second))
+
+
 def _looks_like_job_title(label: str) -> bool:
     lowered = label.casefold().strip()
     if lowered.rstrip(" :–-") in _SECTION_HEADINGS:
@@ -745,6 +837,21 @@ def _looks_like_job_title(label: str) -> bool:
     if not _ROLE_RE.search(lowered):
         return False
     if any(lowered.startswith(prefix) or prefix in lowered for prefix in _NOT_A_JOB):
+        return False
+    stripped = lowered.lstrip("-–•· ")
+    # "Ledig stilling for tømrer i Bergen" names a role besides "stilling"; "Se ledige
+    # stillinger ved vår skole" does not.
+    roles = {item.casefold() for item in _ROLE_RE.findall(stripped)} - {"stilling", "stillinger"}
+    for item in _NOT_A_JOB_PHRASES:
+        if item in ("ledige stillinger", "ledig stilling") and roles:
+            continue
+        if stripped.startswith(item) or (len(item) > 4 and item in stripped):
+            return False
+    if re.match(r"^\s*[-–•]?\s*\d+[.)]\s", label) or "+" in label or "?" in label or "!" in label:
+        return False
+    if _PHONE_IN_LABEL_RE.search(label):
+        return False
+    if _opens_with_person_name(label):
         return False
     # A job title is a noun phrase, not a sentence or a breadcrumb trail.
     if len(label.split()) > 12 or label.count("/") > 1 or label.count("|") > 0:
