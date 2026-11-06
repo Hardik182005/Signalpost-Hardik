@@ -57,7 +57,10 @@ FIELD_FAMILIES: dict[str, dict[str, Any]] = {
     "business_description": {"external": True, "label": "Business description"},
     "contact": {"external": True, "label": "Contact details"},
     "jobs": {"external": True, "label": "Hiring and job postings"},
-    "activity": {"external": True, "label": "Dated public activity"},
+    "activity": {"external": True, "label": "Dated company-published activity"},
+    # Independent coverage that names the company. Kept apart from "activity", which is
+    # only what the company itself publishes.
+    "news": {"external": True, "label": "Independent news coverage"},
 }
 
 EXTERNAL_FAMILIES: tuple[str, ...] = tuple(

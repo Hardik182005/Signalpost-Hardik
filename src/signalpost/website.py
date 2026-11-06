@@ -620,7 +620,8 @@ class WebsiteResearcher:
         resolver = IdentityResolver(identity)
         site_domain = registrable_domain(result.verified_url or "")
         for page in visits:
-            for candidate in F.extract_social_profiles(page.soup, page.response.final_url):
+            for candidate in [*F.extract_social_profiles(page.soup, page.response.final_url),
+                              *F.extract_social_same_as(page.blocks, page.response.final_url)]:
                 platform = candidate.value["platform"]
                 key = f"social::{platform}"
                 handle = str(candidate.value.pop("handle", "") or "")

@@ -51,6 +51,7 @@ from .models import (
     validate_result,
 )
 from .nav_jobs import NavJobIndex, NavJobsResearcher
+from .news import NewsResearcher
 from .registry import RegistryClient
 from .website import WebsiteResearcher
 
@@ -99,6 +100,8 @@ class CompanyPipeline:
         include_roles: bool = True,
         include_nav_jobs: bool = True,
         nav_index: NavJobIndex | None = None,
+        include_news: bool = False,
+        news: NewsResearcher | None = None,
     ) -> None:
         self.fetcher = fetcher
         self.registry = RegistryClient(fetcher)
@@ -107,6 +110,9 @@ class CompanyPipeline:
         self.include_financials = include_financials
         self.include_structure = include_structure
         self.include_roles = include_roles
+        # Independent news is optional enrichment: off by default for library callers,
+        # switched on by the runner, never run in offline mode.
+        self.news = news or (NewsResearcher(fetcher) if include_news and not fetcher.offline else None)
 
     # -- stage wrapper --------------------------------------------------------
 
@@ -256,6 +262,12 @@ class CompanyPipeline:
 
     # -- terminal state -------------------------------------------------------
 
+    def _news_stage(self, org: str, identity: CompanyIdentity, verified_url: str | None) -> StageOutcome:
+        assert self.news is not None
+        found = self.news.research(org, identity, verified_url)
+        return StageOutcome(name="news", ok=True, claims=found.claims, evidence=found.evidence,
+                            snapshots=found.snapshots, detail=found.detail)
+
     @staticmethod
     def _terminal_state(
         registry: StageOutcome, website: StageOutcome | None, claims: list[Claim]
@@ -363,6 +375,16 @@ class CompanyPipeline:
                 result.operations["dns_lookups"] = discovery.get("dns_lookups", 0)
                 result.operations["candidates_considered"] = discovery.get("considered", 0)
                 result.operations["candidates_fetched"] = len(discovery.get("candidates", []))
+            if self.news is not None:
+                verified_url = website.detail.get("verified_url") if website.detail else None
+                news = self._stage("news", org, lambda: self._news_stage(org, identity, verified_url))
+                stage_times["news"] = news.seconds
+                result.claims.extend(news.claims)
+                result.evidence.extend(news.evidence)
+                result.snapshots.extend(news.snapshots)
+                if news.error:
+                    result.errors.append(news.error)
+                result.identity["news"] = news.detail
         else:
             result.identity = {"organisation_number": org, "names": [], "resolved": False}
 

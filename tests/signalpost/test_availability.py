@@ -96,7 +96,7 @@ class TestStateVocabularies:
     def test_exactly_the_five_terminal_states_exist(self) -> None:
         assert TERMINAL_STATES == {"completed", "partial", "not_found", "blocked", "failed"}
 
-    def test_the_five_externally_scored_families_are_marked(self) -> None:
+    def test_the_externally_scored_families_are_marked(self) -> None:
         """Coverage against the pooled reference collection is measured on these."""
         assert set(EXTERNAL_FAMILIES) == {
             "web_presence",
@@ -104,8 +104,9 @@ class TestStateVocabularies:
             "contact",
             "jobs",
             "activity",
+            "news",
         }
-        assert len(FIELD_FAMILIES) == 9
+        assert len(FIELD_FAMILIES) == 10
 
     @pytest.mark.parametrize("state", sorted(AVAILABILITY_STATES))
     def test_every_state_can_be_expressed_on_a_claim(self, state: str) -> None:

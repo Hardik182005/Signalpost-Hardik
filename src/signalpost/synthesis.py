@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any, Iterable
 
 from .models import Claim
@@ -68,6 +69,7 @@ class Brief:
     gaps: list[str] = field(default_factory=list)
     confidence: str = "medium"
     method: str = "deterministic-template"
+    revenue_comparison: dict[str, Any] | None = None
 
     @property
     def summary(self) -> str:
@@ -83,6 +85,7 @@ class Brief:
             "gaps": list(self.gaps),
             "confidence": self.confidence,
             "method": self.method,
+            "revenue_comparison": dict(self.revenue_comparison) if self.revenue_comparison else None,
             # Everything above is traceable to these keys and nothing else.
             "grounded_in": sorted({key for item in self.sentences for key in item.claim_keys}),
         }
@@ -368,25 +371,108 @@ def _financial_sentence(claims: list[Claim]) -> Sentence | None:
     if audited is not None and audited.value is False:
         keys.append(audited.claim_key)
         text += " (the accounts were not audited)"
-    if latest_revenue is not None and period:
-        older = sorted((item for item in figures if item.field == "revenue"
-                        and item.scope == scope and item.reporting_period
-                        and item.reporting_period < period
-                        and item.currency == latest_revenue.currency
-                        and item.unit == latest_revenue.unit),
-                       key=lambda item: item.reporting_period, reverse=True)
-        if older:
-            previous = older[0]
-            try:
-                old, new = float(previous.value), float(latest_revenue.value)
-                change = (new - old) / old * 100 if old > 0 and math.isfinite(old) and math.isfinite(new) else None
-            except (TypeError, ValueError):
-                change = None
-            if change is not None:
-                keys.append(previous.claim_key)
-                previous_period = previous.reporting_period
-                text += f"; revenue was {'up' if change >= 0 else 'down'} {abs(change):.0f}% versus the reported period {previous_period}"
     return Sentence(text + ".", keys, "financials")
+
+
+def _parse_period(period: str | None) -> tuple[date, date] | None:
+    try:
+        start, end = (period or "").split("/")
+        return date.fromisoformat(start), date.fromisoformat(end)
+    except ValueError:
+        return None
+
+
+def _one_year_earlier(day: date) -> date:
+    try:
+        return day.replace(year=day.year - 1)
+    except ValueError:  # 29 February
+        return day.replace(year=day.year - 1, day=28)
+
+
+def _revenue_point(claim: Claim) -> dict[str, Any]:
+    return {
+        "reporting_period": claim.reporting_period,
+        "value": claim.value,
+        "currency": claim.currency,
+        "unit": claim.unit,
+        "scope": claim.scope,
+        "claim_key": claim.claim_key,
+    }
+
+
+def revenue_comparison(claims: list[Claim]) -> dict[str, Any]:
+    """Latest filed revenue against the immediately preceding comparable year.
+
+    Comparable means the same reporting scope, currency and unit, and a period that is
+    exactly one year earlier. Nothing is estimated: when no such figure exists the change
+    is reported as unknown with the reason, never as zero.
+    """
+    revenue = [item for item in _available(claims) if item.field == "revenue" and item.reporting_period]
+    own = [item for item in revenue if item.scope == "company"]
+    revenue = own or [item for item in revenue if item.scope == "group"]
+    if not revenue:
+        return {"status": "unknown", "reason": "no filed revenue figure was found"}
+    latest = max(revenue, key=lambda item: item.reporting_period or "")
+    result: dict[str, Any] = {"status": "unknown", "latest": _revenue_point(latest), "previous": None,
+                              "absolute_change": None, "percent_change": None}
+    span = _parse_period(latest.reporting_period)
+    if span is None:
+        result["reason"] = "the latest reporting period could not be read"
+        return result
+    wanted = (_one_year_earlier(span[0]), _one_year_earlier(span[1]))
+    previous = next((item for item in revenue if item is not latest
+                     and _parse_period(item.reporting_period) == wanted
+                     and item.scope == latest.scope
+                     and item.currency == latest.currency
+                     and item.unit == latest.unit), None)
+    if previous is None:
+        result["reason"] = (f"no {latest.scope or 'same-scope'} revenue in {latest.currency or 'the same currency'} "
+                            f"was filed for the preceding year {wanted[0].isoformat()}/{wanted[1].isoformat()}")
+        return result
+    result["previous"] = _revenue_point(previous)
+    try:
+        old, new = float(previous.value), float(latest.value)
+    except (TypeError, ValueError):
+        result["reason"] = "a revenue value is not numeric"
+        return result
+    if not (math.isfinite(old) and math.isfinite(new)):
+        result["reason"] = "a revenue value is not finite"
+        return result
+    result["status"] = "compared"
+    result["absolute_change"] = new - old
+    if old > 0:
+        result["percent_change"] = round((new - old) / old * 100, 1)
+    else:
+        result["reason"] = "the previous year's revenue was zero or negative, so no percentage is given"
+    return result
+
+
+def _revenue_change_sentence(comparison: dict[str, Any]) -> Sentence | None:
+    latest = comparison.get("latest")
+    if not latest:
+        return None
+    currency = latest.get("currency")
+    latest_year = _year((latest.get("reporting_period") or "").split("/")[-1]) or latest.get("reporting_period")
+    subject = "group" if latest.get("scope") == "group" else "company"
+    if comparison.get("status") != "compared":
+        return Sentence(
+            f"Filed {subject} revenue for {latest_year} was {_format_money(latest.get('value'), currency)}; "
+            f"the change from the previous year is unknown because {comparison.get('reason', 'no comparable figure was found')}.",
+            [latest["claim_key"]], "revenue_change")
+    previous = comparison["previous"]
+    previous_year = _year((previous.get("reporting_period") or "").split("/")[-1]) or previous.get("reporting_period")
+    delta = float(comparison["absolute_change"])
+    if delta == 0:
+        movement = "unchanged"
+    else:
+        movement = f"{'up' if delta > 0 else 'down'} {_format_money(abs(delta), currency)}"
+        if comparison.get("percent_change") is not None:
+            movement += f" ({abs(comparison['percent_change']):.1f}%)"
+    text = (f"Filed {subject} revenue was {_format_money(latest.get('value'), currency)} in {latest_year}, "
+            f"{movement} from {_format_money(previous.get('value'), currency)} in {previous_year}")
+    if delta != 0 and comparison.get("percent_change") is None:
+        text += "; no percentage is given because the previous year's revenue was not positive"
+    return Sentence(text + ".", [latest["claim_key"], previous["claim_key"]], "revenue_change")
 
 
 def _join(parts: list[str]) -> str:
@@ -505,6 +591,27 @@ def _activity_sentence(claims: list[Claim]) -> Sentence | None:
     )
 
 
+def _news_sentence(claims: list[Claim]) -> Sentence | None:
+    """Independent coverage, kept apart from what the company publishes itself."""
+    items = _by_field(claims, "news_mention")
+    if not items:
+        return None
+
+    def when(item: Claim) -> str:
+        value = item.value if isinstance(item.value, dict) else {}
+        return str(value.get("published") or item.last_observed_at or "")
+
+    items = sorted(items, key=when, reverse=True)
+    latest = items[0].value if isinstance(items[0].value, dict) else {}
+    outlet = latest.get("outlet") or "a news outlet"
+    title = _clip(str(latest.get("title") or "an article"), 110)
+    day = (latest.get("published") or "")[:10]
+    count = len(items)
+    lead = f"Independent news coverage found: {count} article{'s' if count != 1 else ''} naming the company"
+    text = f"{lead}; the latest is \"{title}\" ({outlet}{', ' + day if day else ''})."
+    return Sentence(text, [item.claim_key for item in items[:5]], "news")
+
+
 def _changes_sentence(refresh: dict[str, Any] | None, changes: list[dict[str, Any]] | None) -> Sentence | None:
     """What changed since the previous run, or that there is no baseline yet."""
     if not refresh:
@@ -544,7 +651,9 @@ def _unknowns_sentence(claims: list[Claim]) -> Sentence | None:
     if not ({"job_posting", "is_hiring"} & have) and not hiring_checked:
         missing.append("whether it is hiring")
     if "activity_item" not in have:
-        missing.append("dated public activity")
+        missing.append("dated company-published activity")
+    if "news_mention" not in have:
+        missing.append("independent news coverage")
     if not missing:
         return None
     website = next((item for item in claims if item.field == "website" and item.availability != "available"), None)
@@ -612,6 +721,7 @@ def build_brief(
     available = _available(claims)
     name = _first(claims, "legal_name")
     headline = str(name.value) if name else f"Organisation {organisation_number}"
+    comparison = revenue_comparison(claims)
 
     builders = (
         _identity_sentence(claims, organisation_number),
@@ -620,10 +730,12 @@ def build_brief(
         _people_sentence(claims),
         _scale_sentence(claims),
         _financial_sentence(claims),
+        _revenue_change_sentence(comparison),
         _presence_sentence(claims),
         _contact_sentence(claims),
         _jobs_sentence(claims),
         _activity_sentence(claims),
+        _news_sentence(claims),
         _changes_sentence(refresh, changes),
         _unknowns_sentence(claims),
     )
@@ -634,10 +746,12 @@ def build_brief(
         ("description", "What it does"),
         ("people", "Who runs it"),
         ("financials", "Latest accounts"),
+        ("revenue_change", "Revenue change"),
         ("scale", "Scale"),
         ("web_presence", "Online"),
         ("jobs", "Hiring"),
         ("activity", "Recent activity"),
+        ("news", "In the news"),
         ("changes", "Changes"),
     ):
         match = next((item for item in sentences if item.topic == topic), None)
@@ -651,6 +765,7 @@ def build_brief(
         highlights=highlights,
         gaps=_gaps(claims),
         confidence=_confidence(claims, available),
+        revenue_comparison=comparison,
     )
 
 

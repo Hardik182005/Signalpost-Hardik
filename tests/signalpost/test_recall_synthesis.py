@@ -104,10 +104,14 @@ def test_incomparable_figures_never_produce_ratios(difference):
     assert "margin" not in text
 
 
-def test_nonconsecutive_revenue_comparison_names_actual_period():
-    text = financial([claim("revenue", 200, key="new", reporting_period=PERIOD),
-                      claim("revenue", 100, key="old", reporting_period="2022-01-01/2022-12-31")]).text
-    assert "year before" not in text and "2022-01-01/2022-12-31" in text
+def test_nonconsecutive_revenue_is_not_compared_as_the_previous_year():
+    brief = build_brief(ORG, [claim("revenue", 200, key="new", reporting_period=PERIOD),
+                              claim("revenue", 100, key="old", reporting_period="2022-01-01/2022-12-31")])
+    assert brief.revenue_comparison["status"] == "unknown"
+    assert brief.revenue_comparison["previous"] is None
+    change = next(s for s in brief.sentences if s.topic == "revenue_change")
+    assert "unknown" in change.text and "2024-01-01/2024-12-31" in change.text
+    assert change.claim_keys == ["new"]
 
 
 def test_latest_profit_does_not_disappear_behind_stale_revenue():

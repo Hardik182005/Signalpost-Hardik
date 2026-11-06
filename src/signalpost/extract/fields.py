@@ -448,6 +448,49 @@ def extract_social_profiles(soup: BeautifulSoup, base_url: str) -> list[Candidat
     return list(found.values())[:12]
 
 
+_ORG_TYPES = {"organization", "corporation", "localbusiness", "store", "restaurant", "professionalservice",
+              "website", "onlinestore", "ngo", "educationalorganization", "medicalorganization"}
+
+
+def extract_social_same_as(blocks: list[dict[str, Any]], base_url: str) -> list[Candidate]:
+    """Social profiles the site declares as its own in schema.org `sameAs`.
+
+    Only organisation-shaped blocks count: a `sameAs` on a Person or an Article names
+    someone else. The same profile-shape rules and identity gate apply as for links.
+    """
+    found: dict[str, Candidate] = {}
+    for block in blocks:
+        types = block.get("@type") or block.get("type") or []
+        types = [types] if isinstance(types, str) else list(types) if isinstance(types, list) else []
+        if not any(str(item).rsplit("/", 1)[-1].casefold() in _ORG_TYPES for item in types):
+            continue
+        same_as = block.get("sameAs") or block.get("http://schema.org/sameAs") or []
+        values = [same_as] if isinstance(same_as, str) else same_as if isinstance(same_as, list) else []
+        for index, url in enumerate(values):
+            if isinstance(url, dict):
+                url = url.get("@id") or url.get("url") or ""
+            url = str(url).strip()
+            if not url.lower().startswith(("http://", "https://")):
+                continue
+            platform = SOCIAL_HOSTS.get(registrable_domain(url))
+            account = social_handle(url) if platform else None
+            if account is None:
+                continue
+            canonical, handle = account
+            if canonical in found:
+                continue
+            found[canonical] = Candidate(
+                "social_profile",
+                {"platform": platform, "url": canonical, "handle": handle},
+                "json_pointer",
+                f"/{block.get('_syntax', 'json-ld')}/{block.get('_index', 0)}/sameAs/{index}",
+                excerpt=f"sameAs: {canonical}",
+                confidence=0.8,
+                method="schema_org_sameAs",
+            )
+    return list(found.values())[:12]
+
+
 def classify_link(url: str, anchor_text: str) -> str | None:
     """Classify a link into the page type it most likely leads to."""
     haystack = f"{anchor_text} {urlsplit(url).path}".casefold()

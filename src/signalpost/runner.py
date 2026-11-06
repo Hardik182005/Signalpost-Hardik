@@ -110,6 +110,7 @@ class RunConfig:
     include_structure: bool = True
     resume: bool = True
     offline: bool = False
+    include_news: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -123,6 +124,7 @@ class RunConfig:
             "max_pages_per_company": self.max_pages,
             "previous_snapshot": str(self.previous).replace("\\", "/") if self.previous else None,
             "cutoff": self.cutoff,
+            "include_news": self.include_news,
             "include_financials": self.include_financials,
             "include_structure": self.include_structure,
             "resume": self.resume,
@@ -220,6 +222,7 @@ class BatchRunner:
             today=today,
             include_financials=config.include_financials,
             include_structure=config.include_structure,
+            include_news=config.include_news and os.environ.get("SIGNALPOST_NEWS", "1") != "0",
         )
         self.stats = RunStats()
         self.previous = (
