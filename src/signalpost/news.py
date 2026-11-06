@@ -51,6 +51,7 @@ DEFAULT_MAX_ARTICLES = 3
 DEFAULT_MAX_WAIT = 90.0
 # Never queue for the news API into the time the run keeps for finishing companies.
 TIME_RESERVE_RATIO = 0.15
+RATE_LIMIT_BACKOFF = 60.0
 MIN_STEM_LENGTH = 4
 
 
@@ -72,6 +73,11 @@ class RateGate:
         if wait:
             time.sleep(wait)
         return True
+
+    def defer(self, seconds: float) -> None:
+        """Back off after the API said too many requests."""
+        with self._lock:
+            self._next = max(self._next, time.monotonic() + seconds)
 
 
 GDELT_GATE = RateGate()
@@ -192,6 +198,9 @@ class NewsResearcher:
                                         capture_snapshot=False, attempts=1)
         except BudgetExceeded as exc:
             return self._empty(org, "not_available", f"news search stopped: {exc}", detail)
+        if response.status == 429:
+            self.gate.defer(RATE_LIMIT_BACKOFF)
+            return self._empty(org, "failed", "news search rate-limited by GDELT (HTTP 429); not retried", detail)
         if not response.ok:
             return self._empty(org, "failed", f"news search failed: {response.error or response.status}", detail)
         payload = response.json()

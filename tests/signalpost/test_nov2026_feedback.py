@@ -152,3 +152,15 @@ def test_agency_credit_link_is_not_published_as_company_profile():
                                        handle="AxiomThemes", website_domain="fjordrobotics.no").publishable
     assert resolver.assess_profile("https://www.facebook.com/fjordrobotics", linked_from_site=True,
                                    handle="fjordrobotics", website_domain="fjordrobotics.no").publishable
+
+
+def test_http_429_backs_off_the_shared_gate():
+    class TooMany(FakeFetcher):
+        def get(self, url, **kwargs):
+            return Response(ok=False, url=url, final_url=url, status=429, error="HTTP 429")
+
+    gate = RateGate(0)
+    first = NewsResearcher(TooMany({}), gate=gate, max_wait=1).research(ORG, CompanyIdentity(ORG, "FJORD ROBOTICS AS"))
+    assert first.claims[0].availability == "failed" and "429" in first.claims[0].reason
+    second = NewsResearcher(TooMany({}), gate=gate, max_wait=1).research(ORG, CompanyIdentity(ORG, "FJORD ROBOTICS AS"))
+    assert "rate limit busy" in second.claims[0].reason
