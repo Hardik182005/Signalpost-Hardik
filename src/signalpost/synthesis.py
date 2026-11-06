@@ -409,9 +409,21 @@ def revenue_comparison(claims: list[Claim]) -> dict[str, Any]:
     """
     revenue = [item for item in _available(claims) if item.field == "revenue" and item.reporting_period]
     own = [item for item in revenue if item.scope == "company"]
-    revenue = own or [item for item in revenue if item.scope == "group"]
-    if not revenue:
+    group = [item for item in revenue if item.scope == "group"]
+    if not own and not group:
         return {"status": "unknown", "reason": "no filed revenue figure was found"}
+    result = _compare_scope(own or group)
+    if own and group and result["status"] != "compared":
+        # Company figures cannot be compared; the group's own consecutive years may be.
+        # Group is compared only with group, and the result says so.
+        fallback = _compare_scope(group)
+        if fallback["status"] == "compared":
+            fallback["note"] = f"company revenue could not be compared ({result['reason']}); group figures are compared instead"
+            return fallback
+    return result
+
+
+def _compare_scope(revenue: list[Claim]) -> dict[str, Any]:
     latest = max(revenue, key=lambda item: item.reporting_period or "")
     result: dict[str, Any] = {"status": "unknown", "latest": _revenue_point(latest), "previous": None,
                               "absolute_change": None, "percent_change": None}

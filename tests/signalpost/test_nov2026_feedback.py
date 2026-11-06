@@ -30,6 +30,15 @@ def test_group_figure_never_stands_in_for_missing_company_year():
     assert result["status"] == "unknown" and result["previous"] is None
 
 
+def test_group_years_are_compared_with_each_other_when_company_years_cannot_be():
+    result = revenue_comparison([revenue(68, 2025), revenue(106, 2025, scope="group"), revenue(104, 2024, scope="group")])
+    assert result["status"] == "compared" and result["latest"]["scope"] == result["previous"]["scope"] == "group"
+    assert result["absolute_change"] == 2 and "group figures are compared instead" in result["note"]
+    text = next(s.text for s in build_brief(ORG, [revenue(68, 2025), revenue(106, 2025, scope="group"),
+                                                  revenue(104, 2024, scope="group")]).sentences if s.topic == "revenue_change")
+    assert text.startswith("Filed group revenue")
+
+
 def test_currency_mismatch_is_not_compared():
     assert revenue_comparison([revenue(500, 2025), revenue(400, 2024, currency="EUR")])["status"] == "unknown"
 
