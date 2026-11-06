@@ -21,7 +21,7 @@ database, and the site cannot start research jobs. It only reads the static snap
 | ~15:30 | Prompt from `docs/JBOX_PASTE_PROMPT.md` pasted into the JBox project chat. JBox built the site in 7 min 37 s |
 | 15:41 | Fix request: phone navigation overflow and WebGL fallback check |
 | 15:51 | Retry of the navigation fix as a new message. JBox applied CSS-only rules (revision `ea6fc9ad2c7934cc`) |
-| ~16:00 | Published with the JBox "Publish hosted site" button, with the user's approval |
+| ~16:00 | Published with the JBox "Publish hosted site" button, with the user's approval. The public site passes the phone-navigation check that failed before the 15:51 fix, so it carries the fixed build |
 
 ## Dataset
 

@@ -1,7 +1,7 @@
 # Website browser checks — 6 Nov 2026
 
 Site: **https://9-copy-ready-jbox-prompt-create-docs-jbo.sites.jboxai.com/** (JBox hosted,
-published revision `ea6fc9ad2c7934cc`). Dataset: `showcase/data/v1` at commit `07255e2`
+published after the fix that produced preview revision `ea6fc9ad2c7934cc`). Dataset: `showcase/data/v1` at commit `07255e2`
 (run `nov2026-prelim`).
 
 Method: Chrome on Windows 11, driven by Claude Code through the Claude-in-Chrome extension.

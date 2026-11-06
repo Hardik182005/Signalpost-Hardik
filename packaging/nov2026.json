@@ -1,0 +1,79 @@
+{
+  "run_commit": "772f48d",
+  "repository_url": "https://github.com/Hardik182005/Signalpost-Hardik",
+  "files": {
+    "smoke100": {
+      "inputs.txt": "docs/evidence/nov2026/inputs.txt",
+      "envelopes.jsonl": "out/nov2026-final/envelopes.jsonl",
+      "run-report.json": "docs/evidence/nov2026/envelopes-report.json",
+      "integrity-report.json": "docs/evidence/nov2026/integrity-report.json",
+      "refresh-validation.json": "docs/evidence/nov2026/refresh-replay.json",
+      "refresh-report.json": "docs/evidence/nov2026/refresh-report.json",
+      "idempotency-report.json": "docs/evidence/nov2026/idempotency-report.json"
+    },
+    "verification": {
+      "tests.txt": "docs/evidence/nov2026/tests.txt",
+      "clean-install.txt": "docs/evidence/nov2026/clean-install.txt",
+      "research-comparison.md": "docs/evidence/nov2026/BEFORE_AFTER.md",
+      "research-comparison.json": "docs/evidence/nov2026/before-after.json",
+      "manual-review.md": "docs/evidence/nov2026/MANUAL_REVIEW.md",
+      "ui-checks.md": "docs/evidence/nov2026/ui-checks.md"
+    },
+    "website": {
+      "DEPLOYMENT.md": "packaging/nov2026/DEPLOYMENT.md",
+      "JBOX_BUILD_PROVENANCE.md": "docs/JBOX_BUILD_PROVENANCE.md",
+      "dataset-manifest.json": "showcase/data/v1/manifest.json"
+    },
+    "disclosures": {
+      "MODELS_AND_APIS.md": "MODELS_AND_APIS.md",
+      "COSTS.md": "COSTS.md",
+      "SOURCE_RIGHTS.md": "SOURCE_RIGHTS.md",
+      "LIMITATIONS.md": "LIMITATIONS.md"
+    },
+    "email": {
+      "revision-submission.md": "out/nov2026-package/email/revision-submission.md",
+      "jbox-website-submission.md": "out/nov2026-package/email/jbox-website-submission.md"
+    },
+    "top": {
+      "SUBMISSION_README.md": "packaging/nov2026/SUBMISSION_README.md",
+      "CHANGELOG_NOV2026.md": "packaging/nov2026/CHANGELOG_NOV2026.md"
+    }
+  },
+  "manifest": {
+    "branch": "feat/signalpost-jbox-feedback-nov2026",
+    "frontend_repository": "not in git: the site source lives in JBox project usbe3zu3gl4bzjp4y7irwcpx (https://jboxai.com/project/usbe3zu3gl4bzjp4y7irwcpx/)",
+    "frontend_commit": "not applicable: JBox hosted build, see website/JBOX_BUILD_PROVENANCE.md",
+    "live_site": "https://9-copy-ready-jbox-prompt-create-docs-jbo.sites.jboxai.com/",
+    "jbox_project": "usbe3zu3gl4bzjp4y7irwcpx",
+    "website_dataset": {
+      "version": "showcase/data/v1",
+      "commit": "07255e2",
+      "run_id": "nov2026-prelim",
+      "companies": 100,
+      "mode": "snapshot, labelled on the page; no live research from the site"
+    },
+    "install_command": "uv sync --frozen",
+    "run_command": "uv run python scripts/signalpost/run_batch.py --organisations <batch> --output out/envelopes.jsonl --run-id <id> --expected-count <N>",
+    "measured": {
+      "companies": 100,
+      "wall_seconds": 1046.9,
+      "seconds_per_company_median": 75.91,
+      "seconds_per_company_p90": 116.2,
+      "requests": 967,
+      "spend_usd": 0.0,
+      "concurrency": 8
+    },
+    "official_batch_cost_basis": "No paid API, model or proxy is used, so marginal spend is $0 per company at any batch size. The run is bounded by request and time budgets (default 20 requests per company, 2,700 s). Throughput on 6 Nov 2026 was about 100 companies per 17.5 minutes at concurrency 8, dominated by the GDELT news rate limit. SIGNALPOST_NEWS=0 removes that step.",
+    "providers_and_keys": "none required. Public sources: Brønnøysund registers, NAV job ads, company websites, GDELT DOC 2.0. See disclosures/MODELS_AND_APIS.md",
+    "jbox_hosting_cost": "about 1 JBox credit per day from the existing balance; no purchase or subscription",
+    "limitations": [
+      "Verified websites stayed at 14 of 100: discovery and the identity gate were not loosened",
+      "0 independent news items were published in the final run, because GDELT returned HTTP 429 for 76 of 100 lookups",
+      "Revenue change is unknown for 33 of 100 (no comparable preceding period)",
+      "The website shows the preliminary run (nov2026-prelim), not the final run",
+      "After the evidence dialog closes, focus does not return to its trigger",
+      "The smoke inputs are a local held-out sample, not the official batch"
+    ],
+    "qualification_status": "not_determined"
+  }
+}
