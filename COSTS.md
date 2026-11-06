@@ -173,6 +173,17 @@ envelope. The snapshot store is the main disk consumer: `out/eval100b.jsonl` is 
 envelopes, and the snapshot directory holds the retrieved bodies behind them. No GPU is used
 and none is installed, because no model runs.
 
+## November 2026 revision
+
+- The research run still costs **$0.00**. GDELT DOC 2.0 is free and keyless, and article pages
+  are ordinary public reads. The measured figures for the final 100-company run
+  (`nov2026-final`) are in `docs/evidence/nov2026/BEFORE_AFTER.md` (key `third_party_cost_usd`).
+- The news step adds time, not money. It is paced at 1 request per 5 s and backs off for 60 s
+  after HTTP 429, so its wall-clock share is reported separately as `news_stage_seconds_total`.
+- **JBox website hosting:** about **1 JBox credit per day**, taken from the account's existing
+  credit balance. JBox showed this estimate before publishing on 2026-11-06. No purchase or
+  subscription was made. The site can be taken offline from the JBox publishing panel to stop the charge.
+
 ## Assumptions, stated plainly
 
 1. BRREG remains free and unmetered. If it ever introduced a paid tier the spend ledger is

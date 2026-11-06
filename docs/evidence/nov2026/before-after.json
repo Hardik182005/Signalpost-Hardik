@@ -1,0 +1,80 @@
+{
+  "matched_companies": 100,
+  "before": {
+    "companies": 100,
+    "terminal_states": {
+      "partial": 86,
+      "completed": 14
+    },
+    "verified_websites": 14,
+    "website_abstentions": {
+      "no candidate domain resolved in DNS": 40,
+      "candidates failed the identity gate": 31,
+      "match suggested but evidence insufficient": 15
+    },
+    "companies_with_social_profile": 10,
+    "companies_with_independent_news": 0,
+    "news_outcome": {
+      "not searched (no news family in this version)": 100
+    },
+    "revenue_comparison": {
+      "not produced (no comparison in this version)": 100
+    },
+    "available_claims": 4761,
+    "available_claims_with_resolving_evidence": 4761,
+    "available_claims_without_resolving_evidence": 0,
+    "requests": 766,
+    "third_party_cost_usd": 0.0,
+    "run_wall_clock": [
+      "2026-10-13T18:44:31Z",
+      "2026-10-13T18:46:47Z"
+    ],
+    "seconds_per_company_median": 5.7,
+    "seconds_per_company_p90": 13.12,
+    "news_stage_seconds_total": 0.0
+  },
+  "after": {
+    "companies": 100,
+    "terminal_states": {
+      "partial": 86,
+      "completed": 14
+    },
+    "verified_websites": 14,
+    "website_abstentions": {
+      "no candidate domain resolved in DNS": 39,
+      "candidates failed the identity gate": 32,
+      "match suggested but evidence insufficient": 15
+    },
+    "companies_with_social_profile": 10,
+    "companies_with_independent_news": 0,
+    "news_outcome": {
+      "search failed: HTTP 429 (rate limited)": 76,
+      "searched, no independent article found": 11,
+      "search failed: timeout": 8,
+      "hits found, none confirmed to name the company": 3,
+      "skipped: name too generic for exact search": 2
+    },
+    "revenue_comparison": {
+      "compared": 67,
+      "unknown": 33
+    },
+    "available_claims": 4760,
+    "available_claims_with_resolving_evidence": 4760,
+    "available_claims_without_resolving_evidence": 0,
+    "requests": 918,
+    "third_party_cost_usd": 0.0,
+    "run_wall_clock": [
+      "2026-11-06T10:08:11Z",
+      "2026-11-06T10:25:38Z"
+    ],
+    "seconds_per_company_median": 75.81,
+    "seconds_per_company_p90": 115.97,
+    "news_stage_seconds_total": 6492.8
+  },
+  "website_changes": {
+    "gained": [],
+    "lost": [],
+    "changed": []
+  },
+  "interpretation": "Operational coverage on the same 100 inputs, not labelled recall or precision. Live sources change between runs."
+}

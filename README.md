@@ -190,6 +190,21 @@ there is no measured precision or wrong-company rate. [`EVAL.md`](EVAL.md) separ
 checks, automated integrity checks, live operational metrics and independently reviewed
 research quality, and marks the last **unavailable**.
 
+### November 2026 revision
+
+Run `nov2026-final` on 6 Nov 2026 at commit `772f48d`, on the same 100 held-out companies
+([`docs/evidence/nov2026/`](docs/evidence/nov2026/)): 100 envelopes (14 completed / 86 partial
+/ 0 failed), 967 of 2,000 requests, 1,047 s of 2,700 s, $0.00. It added:
+
+- a latest-vs-previous revenue comparison (67 compared, 33 unknown with a reason)
+- an independent `news` family (GDELT candidates confirmed on the article page; 0 articles
+  published in this run because GDELT rate-limited most lookups)
+- schema.org `sameAs` social profiles
+
+Verified websites stayed at 14. The before/after table and its caveats are in
+[`BEFORE_AFTER.md`](docs/evidence/nov2026/BEFORE_AFTER.md). A JBox-built public website shows a
+snapshot: https://9-copy-ready-jbox-prompt-create-docs-jbo.sites.jboxai.com/.
+
 ## Tests
 
 ```
@@ -265,7 +280,11 @@ before trusting any number here.
   (`scripts/signalpost/build_nav_job_index.py --refresh`).
 - **Registry timeouts are real.** A registry read that fails after its retries terminates the
   company as `failed` with the reason stated.
-- **No JBOX integration.**
+- **Independent news is mostly unavailable in practice.** GDELT answered HTTP 429 to most
+  lookups in the Nov 2026 runs; those are recorded as failed lookups, not as "no news".
+- **The JBox website is a snapshot**, not live research:
+  https://9-copy-ready-jbox-prompt-create-docs-jbo.sites.jboxai.com/
+  ([provenance](docs/JBOX_BUILD_PROVENANCE.md)).
 - **No language model**, which means no hallucination and no cost, and also templated prose and
   no semantic understanding.
 - **Four organiser rules are unresolved** and are recorded as unresolved rather than guessed.

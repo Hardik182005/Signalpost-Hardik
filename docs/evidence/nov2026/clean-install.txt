@@ -1,0 +1,24 @@
+# Clean install at commit 772f48d4cc27719fac9641868085b196d48f44c1, 2026-11-06T10:43:59Z
+# source: git archive HEAD into an empty directory; no extras requested
+$ uv --version
+uv 0.10.11 (006b56b12 2026-03-16)
+$ uv sync --frozen
+ + tzdata==2026.3
+ + tzlocal==5.4.4
+ + urllib3==2.7.0
+ + w3lib==2.4.1
+ + webencodings==0.6.1
+exit 0  (exit status of the last command in the pipeline shown)
+$ uv pip list | grep -iE "torch|transformers|scrapy|playwright|fastapi|uvicorn|jinja"
+(none)
+$ uv run main.py --help | head -3
+usage: signalpost-run [-h] [-i INPUT] [-o OUTPUT] [--run-id RUN_ID]
+                      [--limit LIMIT] [--concurrency CONCURRENCY]
+                      [--max-requests MAX_REQUESTS]
+$ printf 917457778 > one.txt; SIGNALPOST_NEWS=0 uv run main.py --input one.txt --output one.jsonl --run-id clean-install
+wall clock       : 109.7s / 2700.0s
+third-party spend: $0.00
+one per input    : True
+official qualification: not_determined
+exit 0  (exit status of the last command in the pipeline shown)
+917457778 completed 63 claims

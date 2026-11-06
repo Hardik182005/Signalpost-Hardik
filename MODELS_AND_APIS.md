@@ -26,6 +26,17 @@ none of which is required and none of which is a personal credential.
 | Brønnøysundregistrene (`data.brreg.no`) | Entity, subentity, roles, subunits, group structure, annual accounts | None — open data | Free, NLOD 2.0 | **Enabled** |
 | NAV vacancy feed (`pam-stilling-feed.nav.no`) | `/api/publicToken`, `/api/v1/feed/{page}`, `/api/v1/feedentry/{ad}` | NAV's published public bearer token, fetched at run time | Free | **Enabled** |
 | Company websites | The company's own pages, `robots.txt` first | None | Free | **Enabled** |
+| GDELT DOC 2.0 (`api.gdeltproject.org/api/v2/doc/doc`) | `mode=artlist&format=json`, one exact-phrase query per company | None — documented public API | Free | **Enabled** (since Nov 2026; `SIGNALPOST_NEWS=0` turns it off) |
+| News article pages returned by GDELT | The article URL, `robots.txt` first | None | Free | **Enabled** with the GDELT step |
+
+GDELT returns *candidate* articles only. A candidate becomes a `news` claim only after the
+article page itself is fetched and found to name the exact company: the registered name with
+its legal form, or the name plus the organisation number, registered city or verified domain.
+The company's own domain is excluded, because that is `activity`, not independent news.
+Requests go through one process-wide gate at 1 request per 5 s. After an HTTP 429 the gate
+backs off for 60 s, and a lookup that cannot get a slot in time is recorded as skipped with
+its reason. During the 6 Nov 2026 runs GDELT answered HTTP 429 to most lookups from this
+machine. Those are recorded as `failed`, not as "no news".
 
 The NAV feed is NAV's open job-vacancy API ([documentation](https://navikt.github.io/pam-stilling-feed/),
 [terms](https://arbeidsplassen.nav.no/vilkar-api)). Its token is the public one NAV publishes
@@ -98,6 +109,7 @@ Every variable is optional. None is a secret; the run works with none of them se
 | `SIGNALPOST_MAX_SPEND_USD` | `runner.py` | Third-party spend cap (default: 10; actual spend is 0) |
 | `SIGNALPOST_CONCURRENCY` | `runner.py` | Companies in flight (default: 8, or 24 above 200 inputs) |
 | `SIGNALPOST_NAV_FEED_TOKEN` | `nav_jobs.py` | Use a registered NAV feed token instead of NAV's public one |
+| `SIGNALPOST_NEWS` | `runner.py` | `0` disables the GDELT news step (default: enabled) |
 | `BRAVE_SEARCH_API_KEY` | `scripts/run_brave_discovery.py` | **Not in the run path.** The script is not invoked by `main.py` or `runner.py`. |
 
 A command-line flag always wins over the environment, and the environment over the default.

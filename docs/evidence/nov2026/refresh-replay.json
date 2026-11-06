@@ -1,0 +1,26 @@
+{
+  "source": "out/nov2026-final/envelopes.jsonl",
+  "passed": true,
+  "unchanged": {
+    "companies": 100,
+    "claims": 5853,
+    "events": 0,
+    "offending": []
+  },
+  "changed": {
+    "companies": 76,
+    "expected": 76,
+    "detected": 76,
+    "material": 76,
+    "extra_events": 0,
+    "missed": []
+  },
+  "failed": {
+    "companies": 14,
+    "expected": 14,
+    "detected": 14,
+    "material": 0,
+    "extra_events": 0,
+    "missed": []
+  }
+}

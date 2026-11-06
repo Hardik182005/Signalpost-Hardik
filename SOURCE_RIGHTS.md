@@ -111,6 +111,32 @@ that motivated this — a WordPress `doing_wp_cron` parameter that made a stable
 like it changed on every run — is recorded in `net.py` and tested in
 `tests/signalpost/test_net.py::TestCanonicalisation`.
 
+## GDELT and news articles (added Nov 2026)
+
+**Method.** One exact-phrase query per company goes to the documented GDELT DOC 2.0 API
+(`api.gdeltproject.org/api/v2/doc/doc`, `mode=artlist`), at no more than 1 request per 5 s
+process-wide. GDELT's results are *candidates*. Each candidate article page is fetched once,
+obeying `robots.txt`, and a `news` claim is published only if the page names the exact company.
+
+**Rights basis.** GDELT publishes the DOC API for open use and asks for attribution
+("GDELT Project"). Article pages are read under the publisher's `robots.txt` as ordinary
+public reading.
+
+**Redistribution.** A `news` claim carries the article URL, title, publication date, a
+content hash and a short excerpt of at most 160 characters around the company name. Article
+bodies are not redistributed. The GDELT search response itself is not evidence for any claim.
+
+**Not used.** Wikidata was not used, because `query.wikidata.org/robots.txt` disallows
+`/sparql` and `www.wikidata.org/robots.txt` disallows `/w/` (checked 2026-11-06). No
+search-engine result page is scraped, and no undocumented or logged-in endpoint is used.
+
+## Public website snapshot (added Nov 2026)
+
+The JBox website and `showcase/data/v1/` publish permitted public facts, their source URLs,
+locators, hashes and short excerpts for 100 companies. Raw snapshot bodies are not published.
+The export drops tracking or credential-like query strings, local paths, stack traces and
+birth dates. Registry facts are attributed to Brønnøysundregistrene (NLOD 2.0).
+
 ## Competition material
 
 `docs/provenance/competition-material.json` records ten organiser artifacts with URL, byte

@@ -38,3 +38,16 @@ flags and the local FastAPI dashboard are preserved. Changes are additive.
 - GDELT coverage of small Norwegian companies is thin; most companies will truthfully show
   "no independent article found".
 - The website shows a snapshot, not live research.
+
+## Results (final run `nov2026-final`, commit `772f48d`, 6 Nov 2026)
+
+Full table and caveats: [`docs/evidence/nov2026/BEFORE_AFTER.md`](evidence/nov2026/BEFORE_AFTER.md).
+
+| Feedback | Outcome on the same 100 held-out companies |
+|---|---|
+| Websites | 14 verified, the same as on 13 Oct. Abstentions: 39 no candidate resolved in DNS, 32 failed the identity gate, 15 insufficient evidence. The gate was not loosened. 3 of 14 are flagged for domain choice in the [manual review](evidence/nov2026/MANUAL_REVIEW.md) |
+| Socials | 10 companies, 21 profiles, all linked from the verified site. 2 profiles are flagged (generic or sibling-brand handle) |
+| News | Searched for 98 companies; 2 names were too generic. GDELT: 76 HTTP 429, 8 timeouts, 11 with no article, 3 with hits but none naming the company. **0 published articles.** Failures are recorded as `failed` with the reason |
+| Summary and revenue change | 67 compared (absolute and %, same scope and currency); 33 `unknown` with a reason, never 0 |
+| Website | Public at https://9-copy-ready-jbox-prompt-create-docs-jbo.sites.jboxai.com/ (JBox-built and hosted, snapshot of run `nov2026-prelim`); see [`JBOX_BUILD_PROVENANCE.md`](JBOX_BUILD_PROVENANCE.md) |
+| Run health | 100 envelopes, one per input (14 completed / 86 partial / 0 failed), 967 of 2,000 requests, 1,047 s of 2,700 s, $0.00. Integrity ok. Idempotency 0 false changes. Live refresh 0 material changes. Replay passed. 521 tests pass |

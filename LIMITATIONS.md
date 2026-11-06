@@ -142,7 +142,8 @@ They are quarantined pending data-rights and held-out gates. The full table with
 reasons is in [`SOURCE_RIGHTS.md`](SOURCE_RIGHTS.md#disabled-connectors).
 
 The consequence is concrete: **the external sources in a run are the company's own website
-and NAV's vacancy register.** There is no news, no reviews, no social listening, no
+and NAV's vacancy register, plus (since Nov 2026) GDELT news candidates confirmed on the
+article page — see section 6a.** There are no reviews, no social listening, no
 third-party directory. `activity` comes from the company's own pages or not at all. `jobs`
 comes from the company's careers page and from NAV, which names employers by organisation
 number; NAV holds a majority of publicly advertised Norwegian vacancies but not Finn.no's,
@@ -154,11 +155,31 @@ display name NAV gives the employer, so an ad from a company whose ads use a bra
 missed until the cache is rebuilt. Every published vacancy is still re-read from NAV in the
 run itself.
 
-## 6. No JBOX integration
+## 6. JBox website (added Nov 2026)
 
-**There is no JBOX integration of any kind.** No code, no connector, no exported artifact, no
-evidence of one. If a prize category or eligibility item requires JBOX evidence, this entry
-does not satisfy it. Status: not started, not planned within this round.
+A public website built with JBox now shows a **snapshot** of one 100-company run:
+https://9-copy-ready-jbox-prompt-create-docs-jbo.sites.jboxai.com/. Its provenance and checks
+are in [`docs/JBOX_BUILD_PROVENANCE.md`](docs/JBOX_BUILD_PROVENANCE.md). It has these limits:
+
+- It is a static snapshot (`showcase/data/v1`, run `nov2026-prelim`) and does not research live.
+  Anonymous visitors cannot start research or spend the budget.
+- The agent does not depend on it. JBox, Node and WebGL are not needed to run research.
+- Hosting uses JBox credits (about 1 per day). If the site is taken offline, the link stops working.
+- One accessibility gap is known: focus does not return to the trigger after the evidence
+  dialog closes.
+
+## 6a. Independent news (added Nov 2026)
+
+The `news` family uses GDELT DOC 2.0 as a candidate source and confirms each article on the
+article page itself. It has these limits:
+
+- On 6 Nov 2026 GDELT answered HTTP 429 to most lookups from the run machine, so most
+  companies show `news: failed (HTTP 429)`. That is a failed lookup, not evidence of no coverage.
+- GDELT's coverage of small Norwegian companies is thin even when it answers.
+- Names too generic for an exact-phrase search (e.g. one common word plus "AS") are skipped
+  and recorded with that reason.
+- No paid or keyed news or search API is used. Wikidata was rejected because its `robots.txt`
+  disallows the query and API paths for generic agents.
 
 ## 7. No language model
 
