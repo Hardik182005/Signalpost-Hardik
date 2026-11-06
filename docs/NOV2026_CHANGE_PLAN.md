@@ -27,6 +27,12 @@ flags and the local FastAPI dashboard are preserved. Changes are additive.
 
 ## Not done / limits
 
+- Wikidata (organisation number P2333 → official website P856) was evaluated and not
+  used: `query.wikidata.org/robots.txt` disallows `/sparql` and `www.wikidata.org/robots.txt`
+  disallows `/w/` (including `api.php`) for generic agents (checked 2026-11-06).
+- GDELT answered HTTP 429 to this machine during the 2026-11-06 runs (after a few
+  manual probes); the agent records such lookups as `failed` with the reason and backs
+  off for 60 s rather than retrying.
 - No paid or keyed search API is used (no key provided). Optional Brave discovery remains
   only in the legacy script.
 - GDELT coverage of small Norwegian companies is thin; most companies will truthfully show
